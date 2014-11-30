@@ -1,0 +1,35 @@
+#!/usr/bin/env python
+
+import sys, os
+import paramiko
+
+class MyException(Exception):
+    def _get_message(self): 
+        return self._message
+    def _set_message(self, message): 
+        self._message = message
+    message = property(_get_message, _set_message)
+
+def main():
+    host='10.50.1.8'
+    user='root'
+    passwd='barajoun@2014'
+    script_arg = sys.argv[1]
+    script = os.path.abspath(os.path.join(os.path.dirname(__file__), 'asset_download'))
+    cmd = "{0} {1}".format(script, script_arg)
+
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(host, username=user, password=passwd)
+
+    print >>sys.stderr, "Executing cmd: ", cmd
+    stdin, stdout, stderr = ssh.exec_command(cmd)
+
+    print >>sys.stderr, 'STDOUT: ', stdout.readlines()
+    print >>sys.stderr, 'STDERR: ', stderr.readlines()
+
+if __name__=='__main__':
+    try:
+       main()  
+    except MyException as exc:
+        print >>sys.stderr, "Error running script `asset_download_blade`: ", exc.message

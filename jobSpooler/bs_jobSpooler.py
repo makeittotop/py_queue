@@ -935,7 +935,7 @@ class jobSpooler(QtGui.QDialog):
                 else:
                     if 'fox' in self.engine:
                         print >>sys.stderr, self.jobFullPath, self.priority
-                        from sync import find_scene_deps, submit_to_queue
+                        from py_queue.sync import find_scene_deps, submit_to_queue
 
                         (file_path, items) = find_scene_deps.gen()
 
@@ -985,7 +985,7 @@ class jobSpooler(QtGui.QDialog):
 
                         if launch_type is not None:
                             task_id = submit_to_queue.submit(launch_type=launch_type, alf_script=self.jobFullPath, dep_file=file_path, sync_list=sync_list, task_uuid=self.uuid, task_owner=getpass.getuser(), spool_dry_run=False)
-                            self.dialog_box('{0} successfully submitted to the queue.'.format(task_id))
+                            self.dialog_box('Remote render task {0} successfully submitted to the queue.'.format(task_id))
                     else:
                         # Send the task to the queue.
                         # The queue will take care of syncing of assets to the remote tractor and launch the render subsequently

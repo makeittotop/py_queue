@@ -104,16 +104,16 @@ class SyncTask(Task):
         task_collection.save(task_doc)
 
     def run(self, task_owner, dep_file_path, cmd, task_uuid):
-        
         task_id = self.request.id
         self.task_uuid = task_uuid
+        self.task_owner = task_owner
 
         #db_insert_task
         self.log.info("[{0}]: Inserting the db: sync".format(task_id))
         self.db_insert_task(self.task_uuid, task_owner)
 
         # SEND SUBMIT MAIL
-        mail_obj = Mail(mail_type='UPLOAD_SUBMIT', task_id=task_id)
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_SUBMIT', task_id=task_id, dep_file_path=dep_file_path, cmd=cmd)
         mail_obj.send()
         self.log.info("[{0}]: UPLOAD SUBMIT MAIL SENT".format(task_id))
 
@@ -149,7 +149,7 @@ class SyncTask(Task):
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
-        mail_obj = Mail(mail_type='UPLOAD_COMPLETE', task_id=task_id, retval=retval)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_COMPLETE', task_id=task_id, retval=retval)        
         mail_obj.send()
         self.log.info("[{0}]: UPLOAD COMPLETE MAIL SENT".format(task_id))
 
@@ -162,7 +162,7 @@ class SyncTask(Task):
         self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
  
         # SEND FAIL MAIL
-        mail_obj = Mail(mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
         mail_obj.send()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
 
@@ -257,10 +257,12 @@ class DownloadTask(Task):
         # save
         task_collection.save(task_doc)
 
-    def run(self, task_uuid):
+    def run(self, task_owner, task_uuid):
         task_id = self.request.id
         self.task_uuid = task_uuid
         self.log.info("[{0}]: Received task_uuid: {1}".format(task_id, self.task_uuid))
+        self.task_owner = task_owner
+        
 
         #db_insert_task
         self.db_insert_task(self.task_uuid)
@@ -279,7 +281,7 @@ class DownloadTask(Task):
         test_cmd = "/bin/bash -c \"echo {0}\"".format(cmd)
 
         # SEND SUBMIT MAIL
-        mail_obj = Mail(mail_type='DOWNLOAD_SUBMIT', task_id=task_id)
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_SUBMIT', task_id=task_id)
         mail_obj.send()
         self.log.info("[{0}]: DOWNLOAD SUBMIT MAIL SENT".format(task_id))
 
@@ -317,7 +319,7 @@ class DownloadTask(Task):
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
-        mail_obj = Mail(mail_type='DOWNLOAD_COMPLETE', task_id=task_id, retval=retval)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_COMPLETE', task_id=task_id, retval=retval)        
         mail_obj.send()
         self.log.info("[{0}]: DOWNLOAD COMPLETE MAIL SENT".format(task_id))
 
@@ -329,7 +331,7 @@ class DownloadTask(Task):
         self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
 
         # SEND FAIL MAIL
-        mail_obj = Mail(mail_type='DOWNLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
         mail_obj.send()
         self.log.info("[{0}]: DOWNLOAD FAIL MAIL SENT".format(task_id))
 
@@ -426,6 +428,7 @@ class SpoolTask(Task):
     def run(self, task_owner, engine, priority, alf_script, task_uuid):
         task_id = self.request.id
         self.task_uuid = task_uuid
+        self.task_owner = task_owner
 
         cmd = "task_queue.rfm.tractor.Spool(['--user={0}', --engine={1}', '--priority={2}', '{3}'])".format(task_owner, engine, priority, alf_script)
         self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
@@ -448,7 +451,7 @@ class SpoolTask(Task):
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND SPOOL COMPLETE MAIL
-        mail_obj = Mail(mail_type='SPOOL_COMPLETE', task_id=task_id, retval=retval)
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_COMPLETE', task_id=task_id, retval=retval)
         mail_obj.send()
         self.log.info("[{0}]: SPOOL COMPLETE MAIL SENT".format(task_id))
 
@@ -461,7 +464,7 @@ class SpoolTask(Task):
         self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
 
         # SEND FAIL MAIL
-        mail_obj = Mail(mail_type='SPOOL_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
         mail_obj.send()
 
 

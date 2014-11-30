@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+
+import sys, os, datetime
+from celery import chain
+from pymongo import MongoClient
+
+
+from task_queue.tasks import DownloadTask
+
+class MyException(Exception):
+    def _get_message(self):
+        return self._message
+    def _set_message(self, message):
+        self._message = message
+    message = property(_get_message, _set_message)
+
+def db_insert_task(task_id, host='94.206.104.226', port=27017, status='pending'):
+    client = MongoClient('mongodb://{0}:{1}/'.format(host, port))
+
+    task_db = client.queue
+    task_collection = client.queue.tasks
+
+    print >>sys.stderr, "++++++++++++++++++++++++++++++++++++++++"
+    print >>sys.stderr, "++Inserting the task into the database++"
+    print >>sys.stderr, "++++++++++++++++++++++++++++++++++++++++"
+
+    counter = 0
+
+    task_doc = task_collection.find_one({'task_id' : task_id})
+    if not task_doc:
+        task_doc = {}
+        task_doc['task_id'] = task_id
+        # Calling a javascript function stored inside MongoDb through db.system.js.save({...})
+        counter = int(task_db.eval('getNextSequenceValue("task_counter")'))
+        task_doc['_counter'] = counter
+    
+    counter = task_doc['_counter']
+
+    task_doc['download_status'] = status
+    task_doc['download_init'] = datetime.datetime.now()
+
+    task_collection.save(task_doc)
+
+    return task_doc
+
+def main():
+    '''
+    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    if not path in sys.path:
+        sys.path.insert(1, path)
+    del path
+    '''
+
+    task_uuid = sys.argv[1]
+    print >>sys.stdout, 'Task Uid:',  task_uuid
+
+    # Add 'pending' status to the database
+    task_doc = db_insert_task(task_uuid)
+    counter = task_doc['_counter']
+    task_owner = task_doc['task_owner']
+
+    download_task_id = "{0}__DOWNLOAD".format(counter)
+    #download_task_id = "{0}__{1}".format('DWNLD', task_uuid)
+
+    dt = DownloadTask.subtask(args=('a.pareek@barajoun.com', task_uuid, ), task_id=download_task_id) #'seq13_scn27_sh006_lig_lighting_v008__9d8da986-7a3d-4cd4-92b5-9b76b72b60e0')
+
+    # Fire off the chain
+    task = chain(dt)()
+
+    print >>sys.stdout, "Task queued with id: ", download_task_id
+
+if __name__=='__main__':
+    try:
+        main()  
+    except MyException as exc:
+        print >>sys.stderr, "Error running the script `asset_download`: ", exc.message

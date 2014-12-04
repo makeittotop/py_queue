@@ -28,6 +28,7 @@ WINDOW_TITLE = 'Tractor/Alfred Job Spooler'
 WINDOW_VERTION = __version__
 WINDOW_NAME = 'qSpooler'
 
+Q_SUBMIT_BIN = '/nas/projects/development/productionTools/py_queue/bin/submit_to_queue.py'
 
 def mayaMainWindow():
     try:
@@ -935,7 +936,7 @@ class jobSpooler(QtGui.QDialog):
                 else:
                     if 'fox' in self.engine:
                         print >>sys.stderr, self.jobFullPath, self.priority
-                        from py_queue.sync import find_scene_deps, submit_to_queue
+                        from py_queue.sync import find_scene_deps #, submit_to_queue
 
                         (file_path, items) = find_scene_deps.gen()
 
@@ -984,8 +985,27 @@ class jobSpooler(QtGui.QDialog):
                             self.ui.checkBox_2.setChecked(True)
 
                         if launch_type is not None:
-                            task_id = submit_to_queue.submit(launch_type=launch_type, alf_script=self.jobFullPath, dep_file=file_path, sync_list=sync_list, task_uuid=self.uuid, task_owner=getpass.getuser(), spool_dry_run=False)
-                            self.dialog_box('Remote render task {0} successfully submitted to the queue.'.format(task_id))
+                            cmd_str = "{0} {1} {2} {3} {4} {5}".format(Q_SUBMIT_BIN, launch_type, file_path, getpass.getuser(), self.jobFullPath, self.uuid) 
+                            print >>sys.stderr, cmd_str 
+                            
+                            """
+                            /nas/projects/development/productionTools/py_queue/bin/submit_to_queue.py SYNC_RENDER 
+                            /nas/projects/Tactic/bilal/render/.depsTemp/seq13_scn27_sh006_lig_lighting_v008.ma_filtered.lst abhishek 
+                            /nas/projects/Tactic/sandbox/bilal/abhishek/sequences/seq13/scn27/sh006_SHOT00000128/lighting/lighting/scenes//seq13_scn27_sh006_lig_lighting_v008.alf caf1f7d1-2a42-4810-a171-2973c82de9ed
+                            """
+                            # Subprocess to launch the Q_SUBMIT_BIN
+                            import subprocess
+                            p = subprocess.Popen([Q_SUBMIT_BIN, launch_type, '{0}'.format(file_path), '{0}'.format(getpass.getuser()), '{0}'.format(self.jobFullPath), '{0}'.format(self.uuid)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            (out, err) = p.communicate()
+                            if err:
+                                print err
+                                raise IOError(err)
+                            if out:
+                                (task_uuid, task_id) = out.split(' : ')
+                                self.dialog_box('Task: {0} with id: {1} has been successfully submitted to the Queue.'.format(task_uuid, task_id))
+
+                            #(task_id, task_uuid) = submit_to_queue.submit(launch_type=launch_type, alf_script=self.jobFullPath, dep_file=file_path, sync_list=sync_list, task_uuid=self.uuid, task_owner=getpass.getuser(), spool_dry_run=False)
+                            #self.dialog_box('Task: {0} with id: {1} has been successfully submitted to the Queue.'.format(task_uuid, task_id))
                     else:
                         # Send the task to the queue.
                         # The queue will take care of syncing of assets to the remote tractor and launch the render subsequently
@@ -1012,10 +1032,10 @@ class jobSpooler(QtGui.QDialog):
 
     def dialog_box(self, msg):
         self.genMsgEnabled = True
-        Dismiss = 'Dismiss'
+        Dismiss = 'OK'
         message = QtGui.QMessageBox(self)
         message.setText(msg)
-        message.setWindowTitle('Job Script...')
+        message.setWindowTitle('Queue submission')
         message.setIcon(QtGui.QMessageBox.Information)
         message.addButton(Dismiss, QtGui.QMessageBox.AcceptRole)
         message.exec_()

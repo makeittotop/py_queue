@@ -1,0 +1,69 @@
+from pymongo import MongoClient
+from tabulate import tabulate  
+import datetime, sys
+
+
+if len(sys.argv) < 2:
+    print >>sys.stdout, "Usage: <script> <user_name>\n\n"
+    sys.exit(0)
+
+d = datetime.datetime(2014, 11, 30, 23, 0, 0)
+
+client = MongoClient('lic', 27017)
+collection = client.queue.tasks
+
+user_docs = collection.find({'task_owner': sys.argv[1], 'task_init': {'$gt' : d}})
+
+task_table = []
+for doc in user_docs:
+    sub_task = []
+    #1. Task ID
+    sub_task.append(doc['task_id'])
+    #2. Task Init
+    sub_task.append(doc['task_init'])
+    if doc.has_key('sync_id'):
+        #3. upload id
+        sub_task.append(doc.get('sync_id'))
+    else:
+        sub_task.append('--')
+    if doc.has_key('sync_status'):
+        #4. 
+        sub_task.append(doc.get('sync_status'))
+    else:
+        sub_task.append('--')
+    if doc.has_key('spool_id'):
+        #5. spool id
+        sub_task.append(doc.get('spool_id'))
+    else:
+        sub_task.append('--')
+    if doc.has_key('spool_status'):
+        #6. 
+        sub_task.append(doc.get('spool_status'))
+    else:
+        sub_task.append('--')
+    if doc.has_key('spool_retval'):
+        #7. 
+        sub_task.append(doc.get('spool_retval'))
+    else:
+        sub_task.append('--')
+    if doc.has_key('download_id'):
+        #8. download id
+        sub_task.append(doc.get('download_id'))
+    else:
+        sub_task.append('--')
+    if doc.has_key('download_status'):
+        #9. 
+        sub_task.append(doc.get('download_status'))
+    else:
+        sub_task.append('--')
+    task_table.append(sub_task)
+
+headers=["Task ID", "Task Init", "Upload ID", "Upload", "Spool ID", "Spool", "Render Status", "Download ID", "Download Status"]
+
+if user_docs:
+    print >>sys.stdout, tabulate(task_table, headers=headers)
+    sys.exit(0)
+else:
+    print >>sys.stdout, "No suitable tasks found\n"
+
+print >>sys.stdout, "\n"

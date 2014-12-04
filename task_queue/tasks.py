@@ -12,38 +12,7 @@ from task_queue.db import QueueDb
 app = Celery('task_queue.tasks')
 app.config_from_object('task_queue.celeryconfig')
 
-@app.task
-@register_task_logger(__name__)
-class TestTask(Task):
-    def run(self, x, y):
-        try:
-	    task_id = self.request.id
-
-	    #logger = get_or_create_task_logger(func=add)
-	    self.log.info("[%s]: add(%d, %d)" % (task_id, x, y))
-
-	    result = x + y
-	    self.log.info("[%s]: add(%d, %d) result: %d" % (task_id, x, y, result))
-        except Exception as exc:
-            self.retry(exc=exc, countdown=10)
-
-	return result
-
-    def on_success(self, retval, task_id, args, kwargs):
-        self.log.info("[{0}]: SUCCESS : {1}".format(task_id, retval))
-
-        # SEND DONE MAIL
-        mail_obj = Mail(mail_type='UPLOAD_COMPLETE', task_id=task_id, retval=retval)        
-        mail_obj.send()
-        self.log.info("[{0}]: UPLOAD COMPLETE MAIL SENT".format(task_id))
-
-    def on_failure(self, exc, task_id, args, kwargs, einfo):
-        self.log.info("[{0}]: FAILURE : {1}".format(task_id, exc))
-
-        # SEND FAIL MAIL
-        mail_obj = Mail(mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
-        mail_obj.send()
-        self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
+QUE_SUBMIT_BIN = 'bin/submit_to_queue.py'
 
 @app.task
 @register_task_logger(__name__)
@@ -62,6 +31,7 @@ class SyncTask(Task):
         if not task_doc:
             task_doc = {}
             task_doc['task_id'] = task_id
+            task_doc['sync_id'] = self.request.id
 
         task_doc['sync_start'] = datetime.datetime.now()
         task_doc['sync_status'] = status
@@ -103,19 +73,24 @@ class SyncTask(Task):
         # save
         task_collection.save(task_doc)
 
-    def run(self, task_owner, dep_file_path, cmd, task_uuid):
+    def run(self, task_owner, dep_file_path, cmd, task_uuid, unique_id, alf_script, operation):
         task_id = self.request.id
         self.task_uuid = task_uuid
+
         self.task_owner = task_owner
+        self.dep_file_path = dep_file_path
+        self.unique_id = unique_id
+        self.alf_script = alf_script
+        self.operation = operation
 
         #db_insert_task
         self.log.info("[{0}]: Inserting the db: sync".format(task_id))
         self.db_insert_task(self.task_uuid, task_owner)
 
         # SEND SUBMIT MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_SUBMIT', task_id=task_id, dep_file_path=dep_file_path, cmd=cmd)
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_START', task_id=task_id, task_uuid=self.task_uuid, dep_file_path=dep_file_path, cmd=cmd)
         mail_obj.send()
-        self.log.info("[{0}]: UPLOAD SUBMIT MAIL SENT".format(task_id))
+        self.log.info("[{0}]: UPLOAD START MAIL SENT".format(task_id))
 
         self.log.info("[{0}]: Dep file: {1}".format(task_id, dep_file_path))
         self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
@@ -149,7 +124,7 @@ class SyncTask(Task):
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_COMPLETE', task_id=task_id, retval=retval)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)        
         mail_obj.send()
         self.log.info("[{0}]: UPLOAD COMPLETE MAIL SENT".format(task_id))
 
@@ -162,7 +137,7 @@ class SyncTask(Task):
         self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
  
         # SEND FAIL MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
         mail_obj.send()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
 
@@ -191,10 +166,16 @@ class SyncTask(Task):
 	        #But make sure that the 'CHAIN' shouldn't propogate further i.e. 'RENDER'
 		#threads mustn't launch
                 if re.match(r'.*error.*', progress_output, flags=re.IGNORECASE):
-                    self.log.info("[{0}]: Detected an error in the transfer stream: {1}".format(task_id, progress_output))
-                    self.errors.append(progress_output)
-                    self.error_count += 1 
-
+                    if re.match(r'.*eagain.*', progress_output, flags=re.IGNORECASE):
+                        # Session Stop  (Error: Session shutdown failed, Tried to write different output after EAGAIN)
+                        self.log.info("[{0}]: Detected a CRITICAL error in the transfer stream, aborting: {1}".format(task_id, progress_output))
+			self.error_count += 1
+			self.errors.append(progress_output)
+                        break
+                    else:
+                        self.log.info("[{0}]: Detected an error in the transfer stream: {1}".format(task_id, progress_output))
+			self.error_count += 1
+			self.errors.append(progress_output)
 	thread.close()
 
         if not self.error_count:
@@ -225,6 +206,7 @@ class DownloadTask(Task):
         if not task_doc:
             task_doc = {}
             task_doc['task_id'] = task_id
+            task_doc['download_id'] = self.request.id
 
         task_doc['download_start'] = datetime.datetime.now()
         task_doc['download_status'] = status
@@ -260,9 +242,11 @@ class DownloadTask(Task):
     def run(self, task_owner, task_uuid):
         task_id = self.request.id
         self.task_uuid = task_uuid
-        self.log.info("[{0}]: Received task_uuid: {1}".format(task_id, self.task_uuid))
+
+        self.log.info("[{0}]: Received task_id: {1}".format(task_id, self.task_uuid))
+        self.log.info("[{0}]: Received task_uuid: {1}".format(self.task_uuid, self.task_uuid))
+
         self.task_owner = task_owner
-        
 
         #db_insert_task
         self.db_insert_task(self.task_uuid)
@@ -281,9 +265,9 @@ class DownloadTask(Task):
         test_cmd = "/bin/bash -c \"echo {0}\"".format(cmd)
 
         # SEND SUBMIT MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_SUBMIT', task_id=task_id)
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_START', task_id=task_id, task_uuid=self.task_uuid)
         mail_obj.send()
-        self.log.info("[{0}]: DOWNLOAD SUBMIT MAIL SENT".format(task_id))
+        self.log.info("[{0}]: DOWNLOAD START MAIL SENT".format(task_id))
 
         #self.log.info("[{0}]: Dep file: {1}".format(task_id, dep_file_path))
         self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
@@ -319,7 +303,7 @@ class DownloadTask(Task):
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_COMPLETE', task_id=task_id, retval=retval)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)        
         mail_obj.send()
         self.log.info("[{0}]: DOWNLOAD COMPLETE MAIL SENT".format(task_id))
 
@@ -331,7 +315,7 @@ class DownloadTask(Task):
         self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
 
         # SEND FAIL MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
         mail_obj.send()
         self.log.info("[{0}]: DOWNLOAD FAIL MAIL SENT".format(task_id))
 
@@ -359,12 +343,20 @@ class DownloadTask(Task):
 	        #In case there is an error, we need to keep the task going to completion
 	        #But make sure that the 'CHAIN' shouldn't propogate further i.e. 'RENDER'
 		#threads mustn't launch
-                if re.match(r'.*error.*', progress_output, flags=re.IGNORECASE):
-                    self.log.info("[{0}]: Detected an error in the transfer stream: {1}".format(task_id, progress_output))
-                    self.error_count += 1
-                    self.errors.append(progress_output)
-
-
+                po_words = map(lambda x: x.lower(), progress_output.split('\s'))
+                for word in po_words:
+                    if 'eagain' in word:
+                #if re.match(r'.*error.*', progress_output, flags=re.IGNORECASE):
+                    #if re.match(r'.*eagain.*', progress_output, flags=re.IGNORECASE):
+                        # Session Stop  (Error: Session shutdown failed, Tried to write different output after EAGAIN)
+                        self.log.info("[{0}]: Detected a CRITICAL error in the transfer stream, aborting: {1}".format(task_id, progress_output))
+			self.error_count += 1
+			self.errors.append(progress_output)
+                        break
+                    elif 'error' in word:
+                        self.log.info("[{0}]: Detected an error in the transfer stream: {1}".format(task_id, progress_output))
+			self.error_count += 1
+			self.errors.append(progress_output)
 	thread.close()
 
         if not self.error_count:
@@ -394,6 +386,7 @@ class SpoolTask(Task):
         if not task_doc:
             task_doc = {}
             task_doc['task_id'] = task_id
+            task_doc['spool_id'] = self.request.id
 
         task_doc['spool_start'] = datetime.datetime.now()
         task_doc['spool_status'] = status
@@ -425,10 +418,15 @@ class SpoolTask(Task):
         # save
         task_collection.save(task_doc)
 
-    def run(self, task_owner, engine, priority, alf_script, task_uuid):
+    def run(self, task_owner, engine, priority, alf_script, task_uuid, unique_id, dep_file, operation):
         task_id = self.request.id
         self.task_uuid = task_uuid
+
         self.task_owner = task_owner
+        self.unique_id = unique_id
+        self.dep_file = dep_file
+        self.operation = operation
+        self.alf_script = alf_script
 
         cmd = "task_queue.rfm.tractor.Spool(['--user={0}', --engine={1}', '--priority={2}', '{3}'])".format(task_owner, engine, priority, alf_script)
         self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
@@ -451,7 +449,7 @@ class SpoolTask(Task):
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND SPOOL COMPLETE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_COMPLETE', task_id=task_id, retval=retval)
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)
         mail_obj.send()
         self.log.info("[{0}]: SPOOL COMPLETE MAIL SENT".format(task_id))
 
@@ -464,10 +462,43 @@ class SpoolTask(Task):
         self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
 
         # SEND FAIL MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
         mail_obj.send()
 
 
+
+@app.task
+@register_task_logger(__name__)
+class TestTask(Task):
+    def run(self, x, y):
+        try:
+	    task_id = self.request.id
+
+	    #logger = get_or_create_task_logger(func=add)
+	    self.log.info("[%s]: add(%d, %d)" % (task_id, x, y))
+
+	    result = x + y
+	    self.log.info("[%s]: add(%d, %d) result: %d" % (task_id, x, y, result))
+        except Exception as exc:
+            self.retry(exc=exc, countdown=10)
+
+	return result
+
+    def on_success(self, retval, task_id, args, kwargs):
+        self.log.info("[{0}]: SUCCESS : {1}".format(task_id, retval))
+
+        # SEND DONE MAIL
+        mail_obj = Mail(mail_type='UPLOAD_COMPLETE', task_id=task_id, retval=retval)        
+        mail_obj.send()
+        self.log.info("[{0}]: UPLOAD COMPLETE MAIL SENT".format(task_id))
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        self.log.info("[{0}]: FAILURE : {1}".format(task_id, exc))
+
+        # SEND FAIL MAIL
+        mail_obj = Mail(mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
+        mail_obj.send()
+        self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
 
 """
 def logger_func(logger, msg):

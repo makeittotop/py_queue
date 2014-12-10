@@ -46,9 +46,12 @@ env.hosts = [
 ]
 # Set the username
 env.user   = "root"
+#env.user   = "abhishek"
 
 # Set the password [NOT RECOMMENDED]
-env.password = "centos"
+env.password = "centos6"
+#env.password = "qwerty"
+
 
 '''
 env.passwords = {
@@ -59,6 +62,19 @@ env.passwords = {
 (Pdb) dir(result)
 ['__add__', '__class__', '__contains__', '__delattr__', '__dict__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__getitem__', '__getnewargs__', '__getslice__', '__gt__', '__hash__', '__init__', '__le__', '__len__', '__lt__', '__mod__', '__module__', '__mul__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__rmod__', '__rmul__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '_formatter_field_name_split', '_formatter_parser', 'capitalize', 'center', 'command', 'count', 'decode', 'encode', 'endswith', 'expandtabs', 'failed', 'find', 'format', 'index', 'isalnum', 'isalpha', 'isdigit', 'islower', 'isspace', 'istitle', 'isupper', 'join', 'ljust', 'lower', 'lstrip', 'partition', 'real_command', 'replace', 'return_code', 'rfind', 'rindex', 'rjust', 'rpartition', 'rsplit', 'rstrip', 'split', 'splitlines', 'startswith', 'stderr', 'stdout', 'strip', 'succeeded', 'swapcase', 'title', 'translate', 'upper', 'zfill']
 '''
+
+def add_ssh_keys():
+    with settings(warn_only=True):
+        for host in env.hosts:
+            #print >>sys.stderr, local("ssh abhishek@{0}".format(host))
+            print >>sys.stderr, local("ssh-copy-id -i /home/abhishek/.ssh/id_rsa.pub abhishek@{0}".format(host))
+        '''
+        print >>sys.stderr, run("mkdir /home/abhishek/.ssh")
+        print >>sys.stderr, put("/home/abhishek/.ssh/id_rsa.pub", "/home/abhishek/.ssh/authorized_keys")
+        '''
+    
+def task_log_777():
+    print >>sys.stderr, run("chmod 777 /var/log/task_queue/*").return_code
 
 def stat_epel_repo():
     result = run("ls -l /etc/yum.repos.d/epel.repo", shell=True)

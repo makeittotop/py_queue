@@ -120,6 +120,7 @@ class Mail(object):
         elif self.mail_type == 'UPLOAD_SUBMIT':
             body = 'Subject: NOTICE: {0} Submission Mail\n'.format(self.sync_id)
             body += '\nDear reader,\n\nTask: {0} has been submitted to upload assets to remote tractor queue.\n'.format(self.task_id)
+            body += '\n\nTask Owner is : {0}\n'.format(self.task_owner.title())
             body += '\nDependency file: {0}.\n\nCommand to be run: {1}\n'.format(self.dep_file_path, self.cmd)
         # SPOOL
         elif self.mail_type == 'SPOOL_COMPLETE':
@@ -131,6 +132,7 @@ class Mail(object):
         elif self.mail_type == 'SPOOL_SUBMIT':
             body = 'Subject: NOTICE: {0} Submission Mail\n'.format(self.spool_id)
             body += '\nDear reader,\n\nTask: {0} has been submitted to upload assets to remote tractor queue.\n'.format(self.task_id)
+            body += '\n\nTask Owner is : {0}\n'.format(self.task_owner.title())
             body += '\nDependency file: {0}.\n\nCommand to be run: {1}\n'.format(self.dep_file_path, self.cmd)
         # DOWNLOAD
         elif self.mail_type == 'DOWNLOAD_START':

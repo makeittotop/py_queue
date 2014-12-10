@@ -8,7 +8,6 @@ SYS_STDOUT_ORIG = sys.stdout
 SYS_STDERR_ORIG = sys.stderr
 # Don't write anything to stdout
 DEV_NULL = open(os.devnull, 'w')
-sys.stderr = DEV_NULL
 
 import datetime
 import glob

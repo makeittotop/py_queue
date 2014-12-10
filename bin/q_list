@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from pymongo import MongoClient
 from tabulate import tabulate  
 import datetime, sys
@@ -7,12 +9,17 @@ if len(sys.argv) < 2:
     print >>sys.stdout, "Usage: <script> <user_name>\n\n"
     sys.exit(0)
 
-d = datetime.datetime(2014, 11, 30, 23, 0, 0)
+d = datetime.datetime(2014, 12, 4, 0, 0, 0) #datetime.date.today() #(2014, 11, 30, 23, 0, 0)
 
 client = MongoClient('lic', 27017)
 collection = client.queue.tasks
 
-user_docs = collection.find({'task_owner': sys.argv[1], 'task_init': {'$gt' : d}})
+if sys.argv[1] == 'all':
+    query_dict = {'task_init': {'$gt' : d}}
+else:
+    query_dict = {'task_owner': sys.argv[1], 'task_init': {'$gt' : d}}  
+      
+user_docs = collection.find(query_dict)
 
 task_table = []
 for doc in user_docs:

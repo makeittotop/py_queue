@@ -4,8 +4,6 @@ import sys
 import os
 import codecs
 from PyQt4 import QtCore, QtGui
-import re, glob, getpass
-
 #from bs_pipeline.bs_jobSpooler.qjobSpooler_UI import Ui_qSpooler
 #from bs_pipeline.bs_jobSpooler.seqInfo import seqInfo
 from jobSpooler.qjobSpooler_UI import Ui_qSpooler
@@ -65,10 +63,20 @@ class jobSpooler(QtGui.QDialog):
         if engineVar != None:
             engines = []
             enginesParts = engineVar.split(':')
+
+            '''
+            eng = '%s:%s'%(enginesParts[2], enginesParts[3])
+            engines.append(eng)
+            self.ui.engineTxt.addItem(eng)
+            self.engine = eng
+            '''
+
             if len(engines) % 2 == 0:
                 for i in xrange(0, len(enginesParts), 2):
+
                     if enginesParts[i] == 'lic':
                         next
+
                     eng = '%s:%s'%(enginesParts[i], enginesParts[i+1])
                     engines.append(eng)
                     self.ui.engineTxt.addItem(eng)
@@ -853,7 +861,7 @@ class jobSpooler(QtGui.QDialog):
             job     += '        } ' + imagePreview + '\n'
 
         if 'fox' in self.engine:
-            if self.taskIndex == 5 || self.taskIndex == 4: 
+            if self.taskIndex == 5: 
                 # str(self.ui.taskTitle.text())
                 # uuid ?
                 from uuid import uuid4

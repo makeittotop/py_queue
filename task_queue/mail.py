@@ -45,6 +45,15 @@ class Mail(object):
             self.task_owner = kwargs.get('task_owner')
             self.sync_id = kwargs.get('sync_id')
             self.cmd = "{0} {1} {2} {3} {4} {5}".format(Q_BIN, self.operation, self.dep_file_path, self.task_owner, self.alf_script, self.unique_id)
+        elif kwargs.get('mail_type') == 'UPLOAD_RETRY':
+           #task_owner=self.task_owner, mail_type='DOWNLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2]
+           self.mail_type = kwargs.get('UPLOAD_RETRY')
+           self.exc = kwargs.get('exc')
+           self.task_id = kwargs.get('task_id')
+           self.task_uuid = kwargs.get('task_uuid')
+           self.einfo = kwargs.get('einfo')
+           self.retry = kwargs.get('retry')
+           self.task_owner = kwargs.get('self.task_owner')
         # SPOOL
         elif kwargs.get('mail_type') == 'SPOOL_COMPLETE':
             self.mail_type = 'SPOOL_COMPLETE'
@@ -67,6 +76,15 @@ class Mail(object):
             self.task_owner = kwargs.get('task_owner')
             self.spool_id = kwargs.get('spool_id')
             self.cmd = "{0} {1} {2} {3} {4} {5}".format(Q_BIN, self.operation, self.dep_file_path, self.task_owner, self.alf_script, self.unique_id)
+        elif kwargs.get('mail_type') == 'SPOOL_RETRY':
+           #task_owner=self.task_owner, mail_type='DOWNLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2]
+           self.mail_type = kwargs.get('SPOOL_RETRY')
+           self.exc = kwargs.get('exc')
+           self.task_id = kwargs.get('task_id')
+           self.task_uuid = kwargs.get('task_uuid')
+           self.einfo = kwargs.get('einfo')
+           self.retry = kwargs.get('retry')
+           self.task_owner = kwargs.get('self.task_owner')
         # DOWNLOAD
         elif kwargs.get('mail_type') == 'DOWNLOAD_FAIL':
             self.mail_type = 'DOWNLOAD_FAIL'
@@ -86,7 +104,15 @@ class Mail(object):
         elif kwargs.get('mail_type') == 'DOWNLOAD_SUBMIT':
             self.mail_type = 'DOWNLOAD_SUBMIT'
             self.task_id = kwargs.get('task_id')
-
+        elif kwargs.get('mail_type') == 'DOWNLOAD_RETRY':
+           #task_owner=self.task_owner, mail_type='DOWNLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2]
+           self.mail_type = kwargs.get('DOWNLOAD_RETRY')
+           self.exc = kwargs.get('exc')
+           self.task_id = kwargs.get('task_id')
+           self.task_uuid = kwargs.get('task_uuid')
+           self.einfo = kwargs.get('einfo')
+           self.retry = kwargs.get('retry')
+           self.task_owner = kwargs.get('self.task_owner')
 
     def send(self): 
         self.server.ehlo()
@@ -120,8 +146,11 @@ class Mail(object):
         elif self.mail_type == 'UPLOAD_SUBMIT':
             body = 'Subject: NOTICE: {0} Submission Mail\n'.format(self.sync_id)
             body += '\nDear reader,\n\nTask: {0} has been submitted to upload assets to remote tractor queue.\n'.format(self.task_id)
-            body += '\n\nTask Owner is : {0}\n'.format(self.task_owner.title())
+            body += '\n\nTask Owner is : {0}\n'.format(self.task_owner)
             body += '\nDependency file: {0}.\n\nCommand to be run: {1}\n'.format(self.dep_file_path, self.cmd)
+        elif self.mail_type == 'UPLOAD_RETRY':
+            body = 'Subject: ALERT: {0} RETRY Mail\n'.format(self.task_id)
+            body += '\nDear reader,\n\nTask: {0} has failed and will be retried.\n\nRetry # {1}.\n\nHere are the log details:\nException: {2}\nBacktrace: {3}\n'.format(self.task_uuid, self.retry, self.exc, self.einfo)
         # SPOOL
         elif self.mail_type == 'SPOOL_COMPLETE':
             body = 'Subject: SUCCESS: {0} Submission Mail\n'.format(self.task_id)
@@ -132,8 +161,11 @@ class Mail(object):
         elif self.mail_type == 'SPOOL_SUBMIT':
             body = 'Subject: NOTICE: {0} Submission Mail\n'.format(self.spool_id)
             body += '\nDear reader,\n\nTask: {0} has been submitted to upload assets to remote tractor queue.\n'.format(self.task_id)
-            body += '\n\nTask Owner is : {0}\n'.format(self.task_owner.title())
+            body += '\n\nTask Owner is : {0}\n'.format(self.task_owner)
             body += '\nDependency file: {0}.\n\nCommand to be run: {1}\n'.format(self.dep_file_path, self.cmd)
+        elif self.mail_type == 'SPOOL_RETRY':
+            body = 'Subject: ALERT: {0} RETRY Mail\n'.format(self.task_id)
+            body += '\nDear reader,\n\nTask: {0} has failed and will be retried.\n\nRetry # {1}.\n\nHere are the log details:\nException: {2}\nBacktrace: {3}\n'.format(self.task_uuid, self.retry, self.exc, self.einfo)
         # DOWNLOAD
         elif self.mail_type == 'DOWNLOAD_START':
             body = 'Subject: NOTICE: {0} Init Mail\n'.format(self.task_id)
@@ -142,8 +174,11 @@ class Mail(object):
             body = 'Subject: SUCCESS: {0} Completion Mail\n'.format(self.task_id)
             body += '\nDear reader,\n\nTask: {0} has downloaded assets from the remote tractor queue successfully.\n\nHere is the return value from the task: {1}\n'.format(self.task_uuid, self.retval)
         elif self.mail_type == 'DOWNLOAD_FAIL':
-            body = 'Subject: ERROR: {0} Fail Mail\n'.format(self.task_id)
+            body = 'Subject: ERROR: {0} FAIL Mail\n'.format(self.task_id)
             body += '\nDear reader,\n\nTask: {0} has failed to download assets from the remote tractor render queue.\n\nHere are the log details:\nException: {1}\nBacktrace: {2}\n'.format(self.task_uuid, self.exc, self.einfo)
+        elif self.mail_type == 'DOWNLOAD_RETRY':
+            body = 'Subject: ALERT: {0} RETRY Mail\n'.format(self.task_id)
+            body += '\nDear reader,\n\nTask: {0} has failed and will be retried.\n\nRetry # {1}.\n\nHere are the log details:\nException: {2}\nBacktrace: {3}\n'.format(self.task_uuid, self.retry, self.exc, self.einfo)
 
         body += '\nIn case of an emergency, please contact Pipeline/I.T.\n'
         body += '\nFrom,\nThe Queue'

@@ -7,3 +7,4 @@ celery worker -A task_queue.tasks -l info -Q sync -n sync_node.%h --concurrency=
 celery worker -l info -A task_queue.tasks -Q download --concurrency=1 -n download_node.%h
 2687 /opt/aspera/sbin/asperaredisd -
 20215 /usr/local/bin/redis-server *:4444                                
+sudo redis redis-2.8.17/redis.conf

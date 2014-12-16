@@ -702,7 +702,7 @@ class UploadTestTask(Task):
         '''
   
         if count is not None and count > 0:
-            retry_count = count - 1
+            retry_count = count
             if status == 'active':
                 task_doc['upload_retry_count'] = retry_count
                 task_doc['upload_retry_{0}_start'.format(retry_count)] = datetime.datetime.now()
@@ -895,7 +895,7 @@ class SpoolTestTask(Task):
         '''
   
         if count is not None and count > 0:
-            retry_count = count - 1
+            retry_count = count
             if status == 'active':
                 task_doc['spool_retry_count'] = retry_count
                 task_doc['spool_retry_{0}_start'.format(retry_count)] = datetime.datetime.now()
@@ -1166,7 +1166,7 @@ class DownloadTestTask(Task):
         '''
   
         if count is not None and count > 0:
-            retry_count = count - 1
+            retry_count = count
             if status == 'active':
                 task_doc['download_retry_count'] = retry_count
                 task_doc['download_retry_{0}_start'.format(retry_count)] = datetime.datetime.now()

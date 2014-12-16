@@ -203,7 +203,10 @@ class Mail(object):
         port = 389
 
         l = ldap.open(server, port)
-        l.simple_bind("abhishek@barajoun.local", "qwerty")
+        l.set_option(ldap.OPT_REFERRALS, 0)
+
+        #l.simple_bind("abhishek@barajoun.local", "qwerty")
+        l.bind_s("abhishek@barajoun.local", "qwerty")
 
         base = 'OU=barajounusers,DC=barajoun,DC=local'
         scope = ldap.SCOPE_SUBTREE
@@ -233,8 +236,7 @@ class Mail(object):
                 count = count + 1
 
                 email_set.append(email)
-            
-                print "%d.\nName: %s: \nE-mail: %s\n" %(count, name, email)
+                #print "%d.\nName: %s: \nE-mail: %s\n" %(count, name, email)
          
         return email_set        
 

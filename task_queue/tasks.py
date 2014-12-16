@@ -95,7 +95,7 @@ class SpoolTask(Task):
     def on_success(self, retval, task_id, args, kwargs):
         # SEND SPOOL COMPLETE MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: SPOOL COMPLETE MAIL SENT".format(task_id))
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
@@ -108,7 +108,7 @@ class SpoolTask(Task):
 
         # SEND FAIL MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send()
+        mail_obj.send_()
 
 @app.task
 @register_task_logger(__name__)
@@ -185,7 +185,7 @@ class SyncTask(Task):
 
         # SEND SUBMIT MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_START', task_id=task_id, task_uuid=self.task_uuid, dep_file_path=dep_file_path, cmd=cmd)
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD START MAIL SENT".format(task_id))
 
         self.log.info("[{0}]: Dep file: {1}".format(task_id, dep_file_path))
@@ -221,7 +221,7 @@ class SyncTask(Task):
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD COMPLETE MAIL SENT".format(task_id))
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
@@ -234,7 +234,7 @@ class SyncTask(Task):
  
         # SEND FAIL MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
 
     def exec_cmd(self, task_id, cmd):
@@ -246,6 +246,7 @@ class SyncTask(Task):
 						   '(.*)'])
         self.error_count = 0
         self.errors = []
+        self.err_critical = False
         while True:
             i = thread.expect_list(cpl, timeout=None)
 	    if i == 0: # EOF
@@ -270,11 +271,15 @@ class SyncTask(Task):
                         self.log.info("[{0}]: Detected a CRITICAL error in the transfer stream, aborting: {1}".format(task_id, progress_output))
 			self.error_count += 1
 			self.errors.append(progress_output)
+                        self.err_critical = True
                         break
                     elif 'error' in word:
                         self.log.info("[{0}]: Detected an error in the transfer stream: {1}".format(task_id, progress_output))
 			self.error_count += 1
 			self.errors.append(progress_output)
+            if self.err_critical:
+                break
+
 	thread.close()
 
         if not self.error_count:
@@ -285,7 +290,7 @@ class SyncTask(Task):
 
     def send_mail(**kwargs):
         mail_obj = Mail(**kwargs)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
          
 @app.task
@@ -365,7 +370,7 @@ class DownloadTask(Task):
 
         # SEND SUBMIT MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_START', task_id=task_id, task_uuid=self.task_uuid)
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: DOWNLOAD START MAIL SENT".format(task_id))
 
         #self.log.info("[{0}]: Dep file: {1}".format(task_id, dep_file_path))
@@ -403,7 +408,7 @@ class DownloadTask(Task):
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: DOWNLOAD COMPLETE MAIL SENT".format(task_id))
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
@@ -415,7 +420,7 @@ class DownloadTask(Task):
 
         # SEND FAIL MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: DOWNLOAD FAIL MAIL SENT".format(task_id))
 
     def exec_cmd(self, task_id, cmd):
@@ -427,6 +432,7 @@ class DownloadTask(Task):
 						   '(.*)'])
         self.error_count = 0
         self.errors = []
+        self.err_critical = False
         while True:
             i = thread.expect_list(cpl, timeout=None)
 	    if i == 0: # EOF
@@ -451,11 +457,15 @@ class DownloadTask(Task):
                         self.log.info("[{0}]: Detected a CRITICAL error in the transfer stream, aborting: {1}".format(task_id, progress_output))
 			self.error_count += 1
 			self.errors.append(progress_output)
+                        self.err_critical = True
                         break
                     elif 'error' in word:
                         self.log.info("[{0}]: Detected an error in the transfer stream: {1}".format(task_id, progress_output))
 			self.error_count += 1
 			self.errors.append(progress_output)
+            if self.err_critical:
+                break
+  
 	thread.close()
 
         if not self.error_count:
@@ -465,13 +475,14 @@ class DownloadTask(Task):
 
     def send_mail(**kwargs):
         mail_obj = Mail(**kwargs)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: DOWNLOAD FAIL MAIL SENT".format(task_id))
 
 @app.task
 @register_task_logger(__name__)
 class UploadTestTask(Task):
-    max_retries = 5
+    max_retries = 3
+    default_retry_delay = 3
 
     def exec_cmd(self, task_id, cmd):
         thread = pexpect.spawn(cmd)
@@ -564,14 +575,14 @@ class UploadTestTask(Task):
         self.operation = operation
 
         # First try 
-        if count == 1:
+        if count == 0:
             #db_insert_task
             self.log.info("[{0}]: Inserting the db: sync".format(task_id))
             self.db_insert_task(self.task_uuid, task_owner)
 
             # SEND SUBMIT MAIL
             mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_START', task_id=task_id, task_uuid=self.task_uuid, dep_file_path=dep_file_path, cmd=cmd)
-            mail_obj.send()
+            mail_obj.send_()
             self.log.info("[{0}]: UPLOAD START MAIL SENT".format(task_id))
 
             self.log.info("[{0}]: Dep file: {1}".format(task_id, dep_file_path))
@@ -623,19 +634,19 @@ class UploadTestTask(Task):
         """  
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
-        #5. Retry send mail
-        msg = "[{0}]: Upload Failed: {1}! Retrying... attempt # {2}".format(task_id, exc.message, args[2])
-        self.log.info(msg)
+        #5. Retry send_ mail
+        #msg = "[{0}]: Upload Failed: {1}! Retrying... attempt # {2}".format(task_id, exc.message, args[2])
+        #self.log.info(msg)
         # SEND RETRY MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2])  
-        mail_obj.send()
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[7])  
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD RETRY MAIL SENT".format(task_id))
         
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval, count=count)        
-        mail_obj.send()
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval, count=args[7])        
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD COMPLETE MAIL SENT".format(task_id))
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
@@ -643,11 +654,11 @@ class UploadTestTask(Task):
         self.log.info(msg)
 
         #db_update_task
-        self.db_update_task(self.task_uuid, 'failed', exc=exc.message, count=count)
+        self.db_update_task(self.task_uuid, 'failed', exc=exc.message, count=args[7])
 
         # SEND FAIL MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
 
     def db_insert_task(self, task_id, status='active'):
@@ -690,7 +701,7 @@ class UploadTestTask(Task):
             task_doc['task_id'] = task_id
         '''
   
-        if count is not None and count > 1:
+        if count is not None and count > 0:
             retry_count = count - 1
             if status == 'active':
                 task_doc['upload_retry_count'] = retry_count
@@ -701,7 +712,7 @@ class UploadTestTask(Task):
                 task_doc['upload_retry_{0}_status'.format(retry_count)] = status 
                 task_doc['upload_retry_{0}_exception'.format(retry_count)] = kwargs.get('exc')
                 task_doc['upload_retry_{0}_einfo'.format(retry_count)] = kwargs.get('einfo')
-                if retry_count == 4 or self.error_type == 'user-abort':
+                if retry_count == 2 or self.error_type == 'user-abort':
                     task_doc['upload_exception'] = kwargs.get('exc')
                     task_doc['upload_einfo'] = kwargs.get('einfo')
             elif status == 'done':
@@ -732,16 +743,17 @@ class UploadTestTask(Task):
 
     def send_mail(**kwargs):
         mail_obj = Mail(**kwargs)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
 
 
 @app.task
 @register_task_logger(__name__)
 class SpoolTestTask(Task):
-    max_retries = 5
+    max_retries = 3
+    default_retry_delay = 3
 
-    def run(self, task_owner, dep_file_path, cmd, task_uuid, unique_id, alf_script, operation, count, **kwargs):
+    def run(self, task_owner, engine, priority, alf_script, task_uuid, unique_id, dep_file, operation, count, **kwargs):
         task_id = self.request.id
         self.task_uuid = task_uuid
 
@@ -754,15 +766,10 @@ class SpoolTestTask(Task):
         self.alf_script = alf_script
 
         # First try 
-        if count == 1:
+        if count == 0:
             #db_insert_task
             self.log.info("[{0}]: Inserting into the db: spool".format(task_id))
             self.db_insert_task(self.task_uuid)
-
-            # SEND SUBMIT MAIL
-            mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_START', task_id=task_id, task_uuid=self.task_uuid, dep_file_path=dep_file_path, cmd=cmd)
-            mail_obj.send()
-            self.log.info("[{0}]: SPOOL START MAIL SENT".format(task_id))
         # Retry
         else:
            #6. Retry log
@@ -793,7 +800,7 @@ class SpoolTestTask(Task):
         except Exception as e:
             #8. DB update
             self.db_update_task(self.task_uuid, 'failed', count=count, exc=e.message)
-            self.retry(args=[task_owner, task_uuid, count+1], exc=e, kwargs=kwargs)
+            self.retry(args=[task_owner, engine, priority, alf_script, task_uuid, unique_id, dep_file, operation, count+1], exc=e, kwargs=kwargs)
 
         """
         if retval == 0:
@@ -817,19 +824,20 @@ class SpoolTestTask(Task):
         """  
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
-        #5. Retry send mail
-        msg = "[{0}]: Spool Failed: {1}! Retrying... attempt # {2}".format(task_id, exc.message, args[2])
-        self.log.info(msg)
+        #5. Retry send_ mail
+        #msg = "[{0}]: Spool Failed: {1}! Retrying... attempt # {2}".format(task_id, exc.message, args[8])
+        #self.log.info(msg)
         # SEND RETRY MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2])  
-        mail_obj.send()
+        '''
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[8])  
+        mail_obj.send_()
         self.log.info("[{0}]: SPOOL RETRY MAIL SENT".format(task_id))
-        
+        '''
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval, count=count)        
-        mail_obj.send()
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval, count=args[8])        
+        mail_obj.send_()
         self.log.info("[{0}]: SPOOL COMPLETE MAIL SENT".format(task_id))
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
@@ -837,12 +845,14 @@ class SpoolTestTask(Task):
         self.log.info(msg)
 
         #db_update_task
-        self.db_update_task(self.task_uuid, 'failed', exc=exc.message, count=count)
+        self.db_update_task(self.task_uuid, 'failed', exc=exc.message, count=args[8])
 
+        '''
         # SEND FAIL MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: SPOOL FAIL MAIL SENT".format(task_id))
+        '''
 
     def db_insert_task(self, task_id, status='active'):
         db_obj = QueueDb()
@@ -884,7 +894,7 @@ class SpoolTestTask(Task):
             task_doc['task_id'] = task_id
         '''
   
-        if count is not None and count > 1:
+        if count is not None and count > 0:
             retry_count = count - 1
             if status == 'active':
                 task_doc['spool_retry_count'] = retry_count
@@ -895,7 +905,7 @@ class SpoolTestTask(Task):
                 task_doc['spool_retry_{0}_status'.format(retry_count)] = status 
                 task_doc['spool_retry_{0}_exception'.format(retry_count)] = kwargs.get('exc')
                 task_doc['spool_retry_{0}_einfo'.format(retry_count)] = kwargs.get('einfo')
-                if retry_count == 4 or self.error_type == 'user-abort':
+                if retry_count == 2 or self.error_type == 'user-abort':
                     task_doc['spool_exception'] = kwargs.get('exc')
                     task_doc['spool_einfo'] = kwargs.get('einfo')
             elif status == 'done':
@@ -926,13 +936,14 @@ class SpoolTestTask(Task):
 
     def send_mail(**kwargs):
         mail_obj = Mail(**kwargs)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: SPOOL FAIL MAIL SENT".format(task_id))
 
 @app.task
 @register_task_logger(__name__)
 class DownloadTestTask(Task):
-    max_retries = 5
+    max_retries = 3
+    default_retry_delay = 3
 
     def exec_cmd(self, task_id, cmd):
         thread = pexpect.spawn(cmd)
@@ -1026,7 +1037,7 @@ class DownloadTestTask(Task):
         ver = items[5]
 
         # First try 
-        if count == 1:
+        if count == 0:
             self.log.info("[{0}]: Received task_id: {1}".format(task_id, self.task_uuid))
             self.log.info("[{0}]: Received task_uuid: {1}".format(self.task_uuid, self.task_uuid))
 
@@ -1036,7 +1047,7 @@ class DownloadTestTask(Task):
 
             #2. SEND SUBMIT MAIL
             mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_START', task_id=task_id, task_uuid=self.task_uuid)
-            mail_obj.send()
+            mail_obj.send_()
             self.log.info("[{0}]: DOWNLOAD START MAIL SENT".format(task_id))
         # Retry
         else:
@@ -1087,19 +1098,19 @@ class DownloadTestTask(Task):
         """  
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
-        #5. Retry send mail
+        #5. Retry send_ mail
         msg = "[{0}]: Download Failed: {1}! Retrying... attempt # {2}".format(task_id, exc.message, args[2])
         self.log.info(msg)
         # SEND RETRY MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2])  
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: DOWNLOAD RETRY MAIL SENT".format(task_id))
         
 
     def on_success(self, retval, task_id, args, kwargs):
         # SEND DONE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval, count=count)        
-        mail_obj.send()
+        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval, count=args[2])        
+        mail_obj.send_()
         self.log.info("[{0}]: DOWNLOAD COMPLETE MAIL SENT".format(task_id))
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
@@ -1107,11 +1118,11 @@ class DownloadTestTask(Task):
         self.log.info(msg)
 
         #db_update_task
-        self.db_update_task(self.task_uuid, 'failed', exc=exc.message, count=count)
+        self.db_update_task(self.task_uuid, 'failed', exc=exc.message, count=args[2])
 
         # SEND FAIL MAIL
         mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: DOWNLOAD FAIL MAIL SENT".format(task_id))
 
     def db_insert_task(self, task_id, status='active'):
@@ -1154,7 +1165,7 @@ class DownloadTestTask(Task):
             task_doc['task_id'] = task_id
         '''
   
-        if count is not None and count > 1:
+        if count is not None and count > 0:
             retry_count = count - 1
             if status == 'active':
                 task_doc['download_retry_count'] = retry_count
@@ -1165,7 +1176,7 @@ class DownloadTestTask(Task):
                 task_doc['download_retry_{0}_status'.format(retry_count)] = status 
                 task_doc['download_retry_{0}_exception'.format(retry_count)] = kwargs.get('exc')
                 task_doc['download_retry_{0}_einfo'.format(retry_count)] = kwargs.get('einfo')
-                if retry_count == 4 or self.error_type == 'user-abort':
+                if retry_count == 2 or self.error_type == 'user-abort':
                     task_doc['download_exception'] = kwargs.get('exc')
                     task_doc['download_einfo'] = kwargs.get('einfo')
             elif status == 'done':
@@ -1196,7 +1207,7 @@ class DownloadTestTask(Task):
 
     def send_mail(**kwargs):
         mail_obj = Mail(**kwargs)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: DOWNLOAD FAIL MAIL SENT".format(task_id))
 
 @app.task
@@ -1239,7 +1250,7 @@ class TestTask(Task):
         """
         # SEND DONE MAIL
         mail_obj = Mail(mail_type='UPLOAD_COMPLETE', task_id=task_id, retval=retval)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD COMPLETE MAIL SENT".format(task_id))
         """
 
@@ -1249,7 +1260,7 @@ class TestTask(Task):
         """
         # SEND FAIL MAIL
         mail_obj = Mail(mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
         """
 
@@ -1259,7 +1270,7 @@ class TestTask(Task):
         """
         # SEND FAIL MAIL
         mail_obj = Mail(mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, einfo=einfo)        
-        mail_obj.send()
+        mail_obj.send_()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
         """
 

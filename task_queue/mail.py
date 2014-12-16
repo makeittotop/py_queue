@@ -2,6 +2,7 @@
 
 import sys
 import smtplib
+import ldap
 
 Q_BIN='/nas/projects/development/productionTools/py_queue/bin/submit_to_queue.py'
 
@@ -47,7 +48,7 @@ class Mail(object):
             self.cmd = "{0} {1} {2} {3} {4} {5}".format(Q_BIN, self.operation, self.dep_file_path, self.task_owner, self.alf_script, self.unique_id)
         elif kwargs.get('mail_type') == 'UPLOAD_RETRY':
            #task_owner=self.task_owner, mail_type='DOWNLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2]
-           self.mail_type = kwargs.get('UPLOAD_RETRY')
+           self.mail_type = 'UPLOAD_RETRY'
            self.exc = kwargs.get('exc')
            self.task_id = kwargs.get('task_id')
            self.task_uuid = kwargs.get('task_uuid')
@@ -78,7 +79,7 @@ class Mail(object):
             self.cmd = "{0} {1} {2} {3} {4} {5}".format(Q_BIN, self.operation, self.dep_file_path, self.task_owner, self.alf_script, self.unique_id)
         elif kwargs.get('mail_type') == 'SPOOL_RETRY':
            #task_owner=self.task_owner, mail_type='DOWNLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2]
-           self.mail_type = kwargs.get('SPOOL_RETRY')
+           self.mail_type = 'SPOOL_RETRY'
            self.exc = kwargs.get('exc')
            self.task_id = kwargs.get('task_id')
            self.task_uuid = kwargs.get('task_uuid')
@@ -106,13 +107,25 @@ class Mail(object):
             self.task_id = kwargs.get('task_id')
         elif kwargs.get('mail_type') == 'DOWNLOAD_RETRY':
            #task_owner=self.task_owner, mail_type='DOWNLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2]
-           self.mail_type = kwargs.get('DOWNLOAD_RETRY')
+           self.mail_type = 'DOWNLOAD_RETRY'
            self.exc = kwargs.get('exc')
            self.task_id = kwargs.get('task_id')
            self.task_uuid = kwargs.get('task_uuid')
            self.einfo = kwargs.get('einfo')
            self.retry = kwargs.get('retry')
            self.task_owner = kwargs.get('self.task_owner')
+
+    def send_(self):
+        email_set = self.get_ldap_email(self.task_owner)
+        if email_set is None:
+            print >>sys.stderr, "No email found for : {0}.".format(self.task_owner)
+            print >>sys.stderr, "No email sent.".format(self.task_owner)
+        else:    
+            header = 'To: ' + self.to + '\n' + 'From: ' + '{0} <{1}>'.format(self.task_owner.title(), email_set[0]) + '\n' #+ '\n' + 'Subject: {0} notification\n'.format(type)
+            msg = header + self.body()
+            self.server.sendmail('', self.to, msg)
+
+        self.server.close()
 
     def send(self): 
         self.server.ehlo()
@@ -184,4 +197,44 @@ class Mail(object):
         body += '\nFrom,\nThe Queue'
 
         return body
+
+    def get_ldap_email(self, keyword):
+        server = '172.16.10.10'
+        port = 389
+
+        l = ldap.open(server, port)
+        l.simple_bind("abhishek@barajoun.local", "qwerty")
+
+        base = 'OU=barajounusers,DC=barajoun,DC=local'
+        scope = ldap.SCOPE_SUBTREE
+        filter = "cn=" + "*" + keyword + "*"
+        retrieve_attributes = None
+
+        count = 0
+        result_set = []
+        email_set = []
+        timeout = 0
+
+        result_id = l.search(base, scope, filter, retrieve_attributes)
+        result_type, result_data = l.result(result_id, timeout)
+        if result_type == ldap.RES_SEARCH_ENTRY:
+            result_set.append(result_data)
+
+        if len(result_set) == 0:
+            print "No Results."
+            return
+         
+        for i in range(len(result_set)):
+            for entry in result_set[i]:
+                name = entry[1]['cn'][0]
+                email = entry[1]['mail'][0]
+                #phone = entry[1]['telephonenumber'][0]
+                #desc = entry[1]['description'][0]
+                count = count + 1
+
+                email_set.append(email)
+            
+                print "%d.\nName: %s: \nE-mail: %s\n" %(count, name, email)
+         
+        return email_set        
 

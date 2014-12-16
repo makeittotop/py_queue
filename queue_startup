@@ -1,0 +1,9 @@
+celery flower -A task_queue.tasks --address=lic
+python /home/render/task_queue/q_mon.py
+redis-cli -h lic -p 4444 -d 0
+celery worker -A task_queue.tasks -Q test_2 -l info --concurrency=1
+celery worker -l info -A task_queue.tasks -Q celery,spool,test --concurrency=1 -n spool_node.%h
+celery worker -A task_queue.tasks -l info -Q sync -n sync_node.%h --concurrency=1
+celery worker -l info -A task_queue.tasks -Q download --concurrency=1 -n download_node.%h
+2687 /opt/aspera/sbin/asperaredisd -
+20215 /usr/local/bin/redis-server *:4444                                

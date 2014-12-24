@@ -22,7 +22,7 @@ del module_path
 from pymongo import MongoClient
 from celery import chain
 
-from task_queue.tasks import SyncTask, SpoolTask
+from task_queue.tasks import SyncTask, UploadTestTask, SpoolTask, SpoolTestTask
 from task_queue.mail import Mail
 from sync import submit_cmds
 
@@ -52,10 +52,10 @@ def db_insert_task(op, task_id, task_owner, host='lic', port=27017, status='pend
     task_doc['task_init'] = datetime.datetime.now()
 
     if op == 'SYNC':
-        task_doc['sync_id'] = "UP-{0}".format(task_doc['_counter'])
+        task_doc['upload_id'] = "UP-{0}".format(task_doc['_counter'])
         task_doc['sync_status'] = status
     elif op == 'SYNC_RENDER':
-       task_doc['sync_id'] = "UP-{0}".format(task_doc['_counter'])
+       task_doc['upload_id'] = "UP-{0}".format(task_doc['_counter'])
        task_doc['spool_id'] = "SPOOL-{0}".format(task_doc['_counter'])
        task_doc['sync_status'] = status
        task_doc['spool_status'] = status
@@ -75,13 +75,14 @@ def db_insert_task(op, task_id, task_owner, host='lic', port=27017, status='pend
 def submit(**kwargs):
     operation = kwargs.get('launch_type')
     dep_file = kwargs.get('dep_file')
-    ascp_cmd = submit_cmds.get_ascp_cmd(kwargs.get('sync_list'))
+    #ascp_cmd = submit_cmds.get_ascp_cmd(kwargs.get('sync_list'))
+    ascp_cmd = submit_cmds.get_proxy_ascp_cmd(kwargs.get('sync_list'))
     task_uuid = kwargs.get('task_uuid')
     task_owner = kwargs.get('task_owner')
     alf_script=kwargs.get('alf_script')
 
     #spool_cmd = submit_cmds.get_tractor_spool_cmd(kwargs.get('alf_script'), kwargs.get('spool_dry_run'))
-    engine='fox:1503'
+    engine='54.169.63.110:1503'
     priority=50
 
     #new_uuid = uuid4()
@@ -94,7 +95,8 @@ def submit(**kwargs):
     mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_START', task_id=task_id, task_uuid=self.task_uuid, dep_file_path=dep_file_path, cmd=cmd)
     mail_obj.send_()
     '''
-
+   
+    count = 0
     # Submit a `CHAIN` to the queue
     if operation == 'SYNC_RENDER':
         task_doc = db_insert_task('SYNC_RENDER', task_id, task_owner)
@@ -106,15 +108,18 @@ def submit(**kwargs):
         #spool_task_uuid = ("spool__{0}__{1}").format(file_base_name, task_uuid)    
 
         # Prepare the `SyncTask`
-        sync_task = SyncTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation), task_id=sync_task_uuid)
+        #sync_task = SyncTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation), task_id=sync_task_uuid)
+        sync_task = UploadTestTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation, count), task_id=sync_task_uuid)
+
         # Prepare the `RenderTask`
-        spool_task = SpoolTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation), task_id=spool_task_uuid, immutable=True)
+        #spool_task = SpoolTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation), task_id=spool_task_uuid, immutable=True)
+        spool_task = SpoolTestTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation, count), task_id=spool_task_uuid, immutable=True)
 
         # with both - sync and spool tasks
         chain(sync_task, spool_task)()
 
         # Send mail
-        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, sync_id=sync_task_uuid)
+        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, upload_id=sync_task_uuid)
         mail_obj.send_()
 
         #return (sync_task_uuid, task_id)
@@ -128,13 +133,14 @@ def submit(**kwargs):
         #sync_task_uuid = ("upload__{0}__{1}").format(file_base_name, task_uuid)    
 
         # Prepare the `SyncTask`
-        sync_task = SyncTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation), task_id=sync_task_uuid)
+        #sync_task = SyncTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation), task_id=sync_task_uuid)
+        sync_task = UploadTestTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation, count), task_id=sync_task_uuid)
 
         # with just the sync task
         chain(sync_task)()
 
         # Send mail
-        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, sync_id=sync_task_uuid)
+        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, upload_id=sync_task_uuid)
         mail_obj.send_()
 
         #return (sync_task_uuid, task_id)
@@ -148,7 +154,8 @@ def submit(**kwargs):
         #spool_task_uuid = ("spool__{0}__{1}").format(file_base_name, task_uuid)    
 
         # Prepare the `RenderTask`
-        spool_task = SpoolTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation), task_id=spool_task_uuid, immutable=True)
+        #spool_task = SpoolTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation), task_id=spool_task_uuid, immutable=True)
+        spool_task = SpoolTestTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation, count), task_id=spool_task_uuid, immutable=True)
 
         # with just the spool task
         chain(spool_task)()

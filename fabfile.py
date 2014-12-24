@@ -23,6 +23,7 @@ def hello(name="Abhishek"):
 env.skip_bad_hosts = True
 env.eagerly_disconnect = True
 env.colorize_errors = True
+env.forward_agent = True
 #env.abort_on_prompts = True
 
 env.hosts = [
@@ -62,6 +63,31 @@ env.passwords = {
 (Pdb) dir(result)
 ['__add__', '__class__', '__contains__', '__delattr__', '__dict__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__getitem__', '__getnewargs__', '__getslice__', '__gt__', '__hash__', '__init__', '__le__', '__len__', '__lt__', '__mod__', '__module__', '__mul__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__rmod__', '__rmul__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '_formatter_field_name_split', '_formatter_parser', 'capitalize', 'center', 'command', 'count', 'decode', 'encode', 'endswith', 'expandtabs', 'failed', 'find', 'format', 'index', 'isalnum', 'isalpha', 'isdigit', 'islower', 'isspace', 'istitle', 'isupper', 'join', 'ljust', 'lower', 'lstrip', 'partition', 'real_command', 'replace', 'return_code', 'rfind', 'rindex', 'rjust', 'rpartition', 'rsplit', 'rstrip', 'split', 'splitlines', 'startswith', 'stderr', 'stdout', 'strip', 'succeeded', 'swapcase', 'title', 'translate', 'upper', 'zfill']
 '''
+
+def check_notify_daemon():
+    with settings(warn_only=True):
+        result = run("cat /var/run/notification_client.pid; pgrep -lf notification_client;")
+        print >>sys.stderr, result
+
+def run_notify_daemon():
+    with settings(warn_only=True):
+        result = run("/nas/projects/development/productionTools/py_queue/bin/notification_client.py")
+        print >>sys.stderr, result
+
+def get_user():
+    with settings(warn_only=True):
+        result = run("w")
+        print >>sys.stderr, result
+
+def add_pyzmq():
+    with settings(warn_only=True):
+        result = run("pip install pyzmq")
+        print >>sys.stderr, result
+
+def add_library(library):
+    with settings(warn_only=True):
+        result = run("pip install {0}".format(library))
+        print >>sys.stderr, result
 
 def add_ssh_keys():
     with settings(warn_only=True):

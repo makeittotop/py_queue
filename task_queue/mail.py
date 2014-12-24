@@ -44,7 +44,7 @@ class Mail(object):
             self.alf_script = kwargs.get('alf_script')
             self.dep_file_path = kwargs.get('dep_file_path')
             self.task_owner = kwargs.get('task_owner')
-            self.sync_id = kwargs.get('sync_id')
+            self.upload_id = kwargs.get('upload_id')
             self.cmd = "{0} {1} {2} {3} {4} {5}".format(Q_BIN, self.operation, self.dep_file_path, self.task_owner, self.alf_script, self.unique_id)
         elif kwargs.get('mail_type') == 'UPLOAD_RETRY':
            #task_owner=self.task_owner, mail_type='DOWNLOAD_RETRY', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo, retry=args[2]
@@ -54,7 +54,7 @@ class Mail(object):
            self.task_uuid = kwargs.get('task_uuid')
            self.einfo = kwargs.get('einfo')
            self.retry = kwargs.get('retry')
-           self.task_owner = kwargs.get('self.task_owner')
+           self.task_owner = kwargs.get('task_owner')
         # SPOOL
         elif kwargs.get('mail_type') == 'SPOOL_COMPLETE':
             self.mail_type = 'SPOOL_COMPLETE'
@@ -85,7 +85,7 @@ class Mail(object):
            self.task_uuid = kwargs.get('task_uuid')
            self.einfo = kwargs.get('einfo')
            self.retry = kwargs.get('retry')
-           self.task_owner = kwargs.get('self.task_owner')
+           self.task_owner = kwargs.get('task_owner')
         # DOWNLOAD
         elif kwargs.get('mail_type') == 'DOWNLOAD_FAIL':
             self.mail_type = 'DOWNLOAD_FAIL'
@@ -113,7 +113,7 @@ class Mail(object):
            self.task_uuid = kwargs.get('task_uuid')
            self.einfo = kwargs.get('einfo')
            self.retry = kwargs.get('retry')
-           self.task_owner = kwargs.get('self.task_owner')
+           self.task_owner = kwargs.get('task_owner')
 
     def send_(self):
         email_set = self.get_ldap_email(self.task_owner)
@@ -157,7 +157,7 @@ class Mail(object):
             body = 'Subject: ERROR: {0} Fail Mail\n'.format(self.task_id) 
             body += '\nDear reader,\n\nTask: {0} has failed to upload assets to the remote tractor queue.\n\nHere are the log details:\nException: {1}\nBacktrace: {2}\n'.format(self.task_uuid, self.exc, self.einfo)
         elif self.mail_type == 'UPLOAD_SUBMIT':
-            body = 'Subject: NOTICE: {0} Submission Mail\n'.format(self.sync_id)
+            body = 'Subject: NOTICE: {0} Submission Mail\n'.format(self.upload_id)
             body += '\nDear reader,\n\nTask: {0} has been submitted to upload assets to remote tractor queue.\n'.format(self.task_id)
             body += '\n\nTask Owner is : {0}\n'.format(self.task_owner)
             body += '\nDependency file: {0}.\n\nCommand to be run: {1}\n'.format(self.dep_file_path, self.cmd)

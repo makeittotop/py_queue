@@ -9,7 +9,7 @@ if len(sys.argv) < 2:
     print >>sys.stdout, "Usage: <script> <user_name>\n\n"
     sys.exit(0)
 
-d = datetime.datetime(2014, 12, 4, 0, 0, 0) #datetime.date.today() #(2014, 11, 30, 23, 0, 0)
+d = datetime.datetime(2014, 12, 22, 0, 0, 0) #datetime.date.today() #(2014, 11, 30, 23, 0, 0)
 
 client = MongoClient('lic', 27017)
 collection = client.queue.tasks
@@ -17,7 +17,8 @@ collection = client.queue.tasks
 if sys.argv[1] == 'all':
     query_dict = {'task_init': {'$gt' : d}}
 else:
-    query_dict = {'task_owner': sys.argv[1], 'task_init': {'$gt' : d}}  
+    #query_dict = {'task_owner': sys.argv[1], 'task_init': {'$gt' : d}}  
+    query_dict = {'task_owner': sys.argv[1]}  
       
 user_docs = collection.find(query_dict)
 
@@ -26,16 +27,18 @@ for doc in user_docs:
     sub_task = []
     #1. Task ID
     sub_task.append(doc['task_id'])
+    #. Task Owner
+    sub_task.append(doc['task_owner'])
     #2. Task Init
     sub_task.append(doc['task_init'])
-    if doc.has_key('sync_id'):
+    if doc.has_key('upload_id'):
         #3. upload id
-        sub_task.append(doc.get('sync_id'))
+        sub_task.append(doc.get('upload_id'))
     else:
         sub_task.append('--')
-    if doc.has_key('sync_status'):
+    if doc.has_key('upload_status'):
         #4. 
-        sub_task.append(doc.get('sync_status'))
+        sub_task.append(doc.get('upload_status'))
     else:
         sub_task.append('--')
     if doc.has_key('spool_id'):
@@ -65,7 +68,7 @@ for doc in user_docs:
         sub_task.append('--')
     task_table.append(sub_task)
 
-headers=["Task ID", "Task Init", "Upload ID", "Upload", "Spool ID", "Spool", "Render Status", "Download ID", "Download Status"]
+headers=["Task ID", "Task Owner", "Task Init", "Upload ID", "Upload Status", "Spool ID", "Spool Status", "Render Status", "Download ID", "Download Status"]
 
 if user_docs:
     print >>sys.stdout, tabulate(task_table, headers=headers)

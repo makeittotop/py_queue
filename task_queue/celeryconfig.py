@@ -29,12 +29,12 @@ BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 43200}
 CELERY_ROUTES = {
     #'task_queue.tasks.UploadTask': {'queue': 'upload'},
     'task_queue.tasks.SyncTask': {'queue': 'sync'},
-    'task_queue.tasks.DownloadTask': {'queue': 'download'},
+    'task_queue.tasks.UploadTestTask': {'queue': 'sync'},
     'task_queue.tasks.SpoolTask': {'queue': 'spool'},
+    'task_queue.tasks.SpoolTestTask': {'queue': 'spool'},
+    'task_queue.tasks.DownloadTestTask': {'queue': 'download'},
+    'task_queue.tasks.DownloadTask': {'queue': 'download'},
     'task_queue.tasks.TestTask': {'queue': 'test'},
-    'task_queue.tasks.DownloadTestTask': {'queue': 'test_2'},
-    'task_queue.tasks.UploadTestTask': {'queue': 'test_2'},
-    'task_queue.tasks.SpoolTestTask': {'queue': 'test_2'},
 }
 
 '''

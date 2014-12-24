@@ -52,13 +52,11 @@ def db_insert_task(op, task_id, task_owner, host='lic', port=27017, status='pend
     task_doc['task_init'] = datetime.datetime.now()
 
     if op == 'SYNC':
-        task_doc['sync_id'] = "UP-{0}".format(task_doc['_counter'])
-        task_doc['sync_status'] = status
+        task_doc['upload_id'] = "UP-{0}".format(task_doc['_counter'])
+        task_doc['upload_status'] = status
     elif op == 'SYNC_RENDER':
-       task_doc['sync_id'] = "UP-{0}".format(task_doc['_counter'])
-       task_doc['spool_id'] = "SPOOL-{0}".format(task_doc['_counter'])
-       task_doc['sync_status'] = status
-       task_doc['spool_status'] = status
+       task_doc['upload_id'] = "UP-{0}".format(task_doc['_counter'])
+       task_doc['upload_status'] = status
     elif op == 'RENDER':
         task_doc['spool_id'] = "SPOOL-{0}".format(task_doc['_counter'])
         task_doc['spool_status'] = status
@@ -101,45 +99,45 @@ def submit(**kwargs):
         task_doc = db_insert_task('SYNC_RENDER', task_id, task_owner)
         counter = task_doc['_counter']
 
-        sync_task_uuid = ("UP-{0}").format(counter)    
+        upload_task_uuid = ("UP-{0}").format(counter)    
         spool_task_uuid = ("SPOOL-{0}").format(counter)    
-        #sync_task_uuid = ("upload__{0}__{1}").format(file_base_name, task_uuid)    
+        #upload_task_uuid = ("upload__{0}__{1}").format(file_base_name, task_uuid)    
         #spool_task_uuid = ("spool__{0}__{1}").format(file_base_name, task_uuid)    
 
         # Prepare the `SyncTask`
-        sync_task = UploadTestTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation, count), task_id=sync_task_uuid)
+        upload_task = UploadTestTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation, count), task_id=upload_task_uuid)
         # Prepare the `RenderTask`
         spool_task = SpoolTestTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation, count), task_id=spool_task_uuid, immutable=True)
 
-        # with both - sync and spool tasks
-        chain(sync_task, spool_task)()
+        # with both - upload and spool tasks
+        chain(upload_task, spool_task)()
 
         # Send mail
-        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, sync_id=sync_task_uuid)
+        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, upload_id=upload_task_uuid)
         mail_obj.send_()
 
-        #return (sync_task_uuid, task_id)
-        print >>sys.stdout, sync_task_uuid, ':', task_id
+        #return (upload_task_uuid, task_id)
+        print >>sys.stdout, upload_task_uuid, ':', task_id
 
     elif operation == 'SYNC':
         task_doc = db_insert_task('SYNC', task_id, task_owner)
         counter = task_doc['_counter']
 
-        sync_task_uuid = ("UP-{0}").format(counter)    
-        #sync_task_uuid = ("upload__{0}__{1}").format(file_base_name, task_uuid)    
+        upload_task_uuid = ("UP-{0}").format(counter)    
+        #upload_task_uuid = ("upload__{0}__{1}").format(file_base_name, task_uuid)    
 
         # Prepare the `SyncTask`
-        sync_task = UploadTestTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation, count), task_id=sync_task_uuid)
+        upload_task = UploadTestTask.subtask(args=(task_owner, dep_file, ascp_cmd, str(task_id), str(task_uuid), alf_script, operation, count), task_id=upload_task_uuid)
 
-        # with just the sync task
-        chain(sync_task)()
+        # with just the upload task
+        chain(upload_task)()
 
         # Send mail
-        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, sync_id=sync_task_uuid)
+        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, upload_id=upload_task_uuid)
         mail_obj.send_()
 
-        #return (sync_task_uuid, task_id)
-        print >>sys.stdout, sync_task_uuid, ':', task_id
+        #return (upload_task_uuid, task_id)
+        print >>sys.stdout, upload_task_uuid, ':', task_id
 
     elif operation == 'RENDER':
         task_doc = db_insert_task('RENDER', task_id, task_owner)

@@ -12,7 +12,7 @@ class Mail(object):
         self.passwd = 'qwerty'
         self.mail_host = '172.16.10.40'
         self.port = 25
-        self.to = 'renderstat@barajoun.com'
+        self.to = ['renderstat@barajoun.com']
         self.from_ = 'a.pareek@barajoun.com'
         self.server = smtplib.SMTP(self.mail_host, self.port)
         # task owner
@@ -117,6 +117,9 @@ class Mail(object):
 
     def send_(self):
         email_set = self.get_ldap_email(self.task_owner)
+        # CC user to the mail
+        self.to.append(email_set[0])
+
         if email_set is None:
             print >>sys.stderr, "No email found for : {0}.".format(self.task_owner)
             print >>sys.stderr, "No email sent.".format(self.task_owner)

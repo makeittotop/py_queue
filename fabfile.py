@@ -40,8 +40,8 @@ env.hosts = [
     '172.16.15.211',
     '172.16.15.212',
     '172.16.15.213',
-#    '172.16.15.214',
-#    '172.16.15.215',
+    '172.16.15.214',
+    '172.16.15.215',
   # 'ip.add.rr.ess
   # 'server2.domain.tld',
 ]
@@ -138,7 +138,7 @@ def yum_check_pip():
         result = run("yum info python-pip.noarch | grep -i repo", shell=True)    
     print >>sys.stdout, "Result: ", result
     
-#@hosts('172.16.15.201') #'172.16.15.214', '172.16.15.212')
+@hosts('172.16.15.214') #'172.16.15.214', '172.16.15.212')
 def yum_install_pip():
     with settings(warn_only=True):
         result = run("yum -y install python-pip.noarch", shell=True)    
@@ -148,9 +148,8 @@ def yum_install_pip():
 def yum_update():
     print >>sys.stderr, run("yum -y update").return_code
         
-#@hosts('172.16.15.201') #'172.16.15.214', '172.16.15.212')
+@hosts('172.16.15.214') #'172.16.15.214', '172.16.15.212')
 def pip_install_modules():
-    '''
     result = run("pip install celery")
     print >>sys.stdout, result
     result = run("pip install redis")
@@ -159,7 +158,8 @@ def pip_install_modules():
     print >>sys.stdout, result
     result = run("pip install pexpect")
     print >>sys.stdout, result
-    '''
+    result = run("pip install dateutils")
+    print >>sys.stdout, result
     print >>sys.stderr, run("pip install flask").return_code
 #@hosts('172.16.15.239')
 def test_submit_q_script():

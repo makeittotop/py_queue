@@ -1,0 +1,35 @@
+#! /usr/local/Nuke6.3v4/Nuke6.3 -nx
+version 6.3 v4
+Gizmo {
+ addUserKnob {20 User l EXR_LUT}
+ addUserKnob {41 red_1 l Exposure T EXPTool1.red_1}
+ addUserKnob {41 blackpoint_1 l blackpoint T EXPTool1.blackpoint_1}
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos -190
+  ypos -158
+ }
+ EXPTool {
+  mode Lights
+  name EXPTool1
+  xpos -190
+  ypos -118
+  addUserKnob {20 User}
+  addUserKnob {41 red_1 l Exposure T EXPTool1.red}
+  addUserKnob {41 blackpoint_1 l blackpoint T EXPTool1.blackpoint}
+ }
+ Colorspace {
+  colorspace_out 2.20
+  name Colorspace1
+  selected true
+  xpos -190
+  ypos -94
+ }
+ Output {
+  name Output1
+  xpos -190
+  ypos 6
+ }
+end_group

@@ -6,6 +6,7 @@ from pymongo import MongoClient
 
 
 from task_queue.tasks import DownloadTask
+from task_queue.tasks import DownloadTestTask
 
 class MyException(Exception):
     def _get_message(self):
@@ -20,24 +21,38 @@ def db_insert_task(task_id, host='94.206.104.226', port=27017, status='pending')
     task_db = client.queue
     task_collection = client.queue.tasks
 
-    print >>sys.stderr, "++++++++++++++++++++++++++++++++++++++++"
-    print >>sys.stderr, "++Inserting the task into the database++"
-    print >>sys.stderr, "++++++++++++++++++++++++++++++++++++++++"
-
-    counter = 0
+    print >>sys.stdout, "++++++++++++++++++++++++++++++++++++++++"
+    print >>sys.stdout, "++Inserting the task into the database++"
+    print >>sys.stdout, "++++++++++++++++++++++++++++++++++++++++"
 
     task_doc = task_collection.find_one({'task_id' : task_id})
     if not task_doc:
         task_doc = {}
         task_doc['task_id'] = task_id
-        # Calling a javascript function stored inside MongoDb through db.system.js.save({...})
-        counter = int(task_db.eval('getNextSequenceValue("task_counter")'))
-        task_doc['_counter'] = counter
-    
-    counter = task_doc['_counter']
 
+	# Calling a javascript function stored inside MongoDb through db.system.js.save({...})
+	counter = int(task_db.eval('getNextSequenceValue("task_counter")'))
+        task_doc['_counter'] = counter
+
+    ''' 
+    try:
+        retry = task_doc.get('download_retry')
+    except KeyError:
+       retry = 0
+
+    if retry is None:
+        task_doc['download_retry'] = 1
+    else:
+        task_doc['download_retry'] = retry + 1
+    '''
+
+    task_doc['download_id'] = "DOWN-{0}".format(task_doc['_counter'])
     task_doc['download_status'] = status
     task_doc['download_init'] = datetime.datetime.now()
+
+    for key in ['download_start', 'download_stop', 'download_exception', 'download_einfo', 'download_retval']:
+       if task_doc.has_key(key):
+           del task_doc[key]
 
     task_collection.save(task_doc)
 
@@ -57,12 +72,19 @@ def main():
     # Add 'pending' status to the database
     task_doc = db_insert_task(task_uuid)
     counter = task_doc['_counter']
-    task_owner = task_doc['task_owner']
 
-    download_task_id = "{0}__DOWNLOAD".format(counter)
+    download_task_id = "DOWN-{0}".format(counter)
     #download_task_id = "{0}__{1}".format('DWNLD', task_uuid)
 
-    dt = DownloadTask.subtask(args=('a.pareek@barajoun.com', task_uuid, ), task_id=download_task_id) #'seq13_scn27_sh006_lig_lighting_v008__9d8da986-7a3d-4cd4-92b5-9b76b72b60e0')
+    try:
+        task_owner = task_doc['task_owner']
+    except Exception:
+        task_owner = 'abhishek'
+
+    #dt = DownloadTask.subtask(args=(task_owner, task_uuid, ), task_id=download_task_id) #'seq13_scn27_sh006_lig_lighting_v008__9d8da986-7a3d-4cd4-92b5-9b76b72b60e0')
+
+    count = 0
+    dt = DownloadTestTask.subtask(args=(task_owner, task_uuid, count), task_id=download_task_id) #'seq13_scn27_sh006_lig_lighting_v008__9d8da986-7a3d-4cd4-92b5-9b76b72b60e0')
 
     # Fire off the chain
     task = chain(dt)()

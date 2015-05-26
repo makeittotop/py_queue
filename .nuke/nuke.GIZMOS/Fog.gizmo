@@ -1,0 +1,59 @@
+#! /usr/local/Nuke/Nuke6.3 -nx
+version 6.3 v2
+Gizmo {
+ tile_color 0xff852dff
+ addUserKnob {20 fog l "Fog (Belal)"}
+ addUserKnob {18 fogColor l "Fog Color"}
+ fogColor {0.5975999832 0.6278120279 0.8299999833}
+ addUserKnob {7 attenuation l Attenuation R 0 2}
+ attenuation 1
+ addUserKnob {7 intensity l Intensity}
+ intensity 1
+ addUserKnob {7 near l Near R 0 25000}
+ near 250
+ addUserKnob {7 far l Far R 0 25000}
+ far 1000
+}
+ Input {
+  inputs 0
+  name source
+  xpos 130
+  ypos -183
+ }
+set N11338390 [stack 0]
+ Expression {
+  expr0 fogColor.r
+  expr1 fogColor.g
+  expr2 fogColor.b
+  channel3 alpha
+  expr3 "intensity*smoothstep(near, far, depth.Z)"
+  name Expression1
+  xpos 301
+  ypos -183
+ }
+ Gamma {
+  channels alpha
+  value {{attenuation}}
+  name Gamma1
+  xpos 301
+  ypos -155
+ }
+ Premult {
+  name Premult1
+  xpos 301
+  ypos -107
+ }
+push $N11338390
+ Merge2 {
+  inputs 2
+  invert_mask true
+  name Merge3
+  xpos 301
+  ypos -69
+ }
+ Output {
+  name Output1
+  xpos 301
+  ypos 30
+ }
+end_group

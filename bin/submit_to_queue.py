@@ -22,7 +22,7 @@ del module_path
 from pymongo import MongoClient
 from celery import chain
 
-from task_queue.tasks import SyncTask, UploadTestTask, SpoolTask, SpoolTestTask
+from task_queue.tasks import UploadTestTask, SpoolTask, SpoolTestTask
 from task_queue.mail import Mail
 from sync import submit_cmds
 
@@ -53,12 +53,12 @@ def db_insert_task(op, task_id, task_owner, host='lic', port=27017, status='pend
 
     if op == 'SYNC':
         task_doc['upload_id'] = "UP-{0}".format(task_doc['_counter'])
-        task_doc['sync_status'] = status
+        task_doc['upload_status'] = status
     elif op == 'SYNC_RENDER':
        task_doc['upload_id'] = "UP-{0}".format(task_doc['_counter'])
        task_doc['spool_id'] = "SPOOL-{0}".format(task_doc['_counter'])
-       task_doc['sync_status'] = status
-       task_doc['spool_status'] = status
+       task_doc['upload_status'] = status
+       #task_doc['spool_status'] = status
     elif op == 'RENDER':
         task_doc['spool_id'] = "SPOOL-{0}".format(task_doc['_counter'])
         task_doc['spool_status'] = status
@@ -80,10 +80,14 @@ def submit(**kwargs):
     task_uuid = kwargs.get('task_uuid')
     task_owner = kwargs.get('task_owner')
     alf_script=kwargs.get('alf_script')
+    priority=kwargs.get('priority')
+    tactic_file=kwargs.get('tactic_file')    
+    task_str=kwargs.get('task_str')
 
     #spool_cmd = submit_cmds.get_tractor_spool_cmd(kwargs.get('alf_script'), kwargs.get('spool_dry_run'))
-    engine='54.169.63.110:1503'
-    priority=50
+    #engine='54.169.63.110:1503'
+    engine='119.81.131.43:1503'
+    #priority=50
 
     #new_uuid = uuid4()
     file_base_name = os.path.basename(dep_file).split('.')[0]
@@ -113,13 +117,13 @@ def submit(**kwargs):
 
         # Prepare the `RenderTask`
         #spool_task = SpoolTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation), task_id=spool_task_uuid, immutable=True)
-        spool_task = SpoolTestTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation, count), task_id=spool_task_uuid, immutable=True)
+        spool_task = SpoolTestTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation, tactic_file, task_str, count), task_id=spool_task_uuid, immutable=True)
 
         # with both - sync and spool tasks
         chain(sync_task, spool_task)()
 
         # Send mail
-        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, upload_id=sync_task_uuid)
+        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, upload_id=sync_task_uuid, priority=priority, tactic_file=tactic_file, task_str=task_str)
         mail_obj.send_()
 
         #return (sync_task_uuid, task_id)
@@ -140,7 +144,7 @@ def submit(**kwargs):
         chain(sync_task)()
 
         # Send mail
-        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, upload_id=sync_task_uuid)
+        mail_obj = Mail(task_owner=task_owner, mail_type='UPLOAD_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, upload_id=sync_task_uuid, priority=priority, tactic_file=tactic_file, task_str=task_str)
         mail_obj.send_()
 
         #return (sync_task_uuid, task_id)
@@ -155,21 +159,21 @@ def submit(**kwargs):
 
         # Prepare the `RenderTask`
         #spool_task = SpoolTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation), task_id=spool_task_uuid, immutable=True)
-        spool_task = SpoolTestTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation, count), task_id=spool_task_uuid, immutable=True)
+        spool_task = SpoolTestTask.subtask(args=(task_owner, engine, priority, alf_script, str(task_id), str(task_uuid), dep_file, operation, tactic_file, task_str, count), task_id=spool_task_uuid, immutable=True)
 
         # with just the spool task
         chain(spool_task)()
 
         # Send mail
-        mail_obj = Mail(task_owner=task_owner, mail_type='SPOOL_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, spool_id=spool_task_uuid)
+        mail_obj = Mail(task_owner=task_owner, mail_type='SPOOL_SUBMIT', unique_id=task_uuid, task_id=task_id, dep_file_path=dep_file, operation=operation, alf_script=alf_script, spool_id=spool_task_uuid, priority=priority, tactic_file=tactic_file, task_str=task_str)
         mail_obj.send_()
 
         #return (spool_task_uuid, task_id
         print >>sys.stdout, spool_task_uuid, ':', task_id
 
 def main():
-    if len(sys.argv) != 6:
-        print >>sys.stdout, "Usage: <script> <operation> <dep_file> <task_owner> <alf_script> <task_uuid>"
+    if len(sys.argv) != 9:
+        print >>sys.stdout, "Usage: <script> <operation> <dep_file> <task_owner> <alf_script> <task_uuid> <priority> <tactic_file> <task_str>"
         sys.exit(0)
 
     launch_type = sys.argv[1]
@@ -177,6 +181,9 @@ def main():
     task_owner = sys.argv[3]
     alf_script = sys.argv[4]
     task_uuid = sys.argv[5]
+    priority = sys.argv[6]
+    tactic_file = sys.argv[7]
+    task_str = sys.argv[8]
 
     dep_file_handle = open(dep_file, "r")
     dep_list = dep_file_handle.readlines()
@@ -200,13 +207,14 @@ def main():
     print >>sys.stdout, "Task Owner:  ", task_owner
     print >>sys.stdout, "Alf Script:  ", alf_script
     print >>sys.stdout, "Sync List:  ", sync_list
+    print >>sys.stdout, "Tractor Priority:  ", priority
 
     # Restore original sys.stdout
     global SYS_STDOUT_ORIG, SYS_STDERR_ORIG
     sys.stdout = SYS_STDOUT_ORIG
     sys.stderr = SYS_STDERR_ORIG
 
-    submit(launch_type=launch_type, dep_file=dep_file, sync_list=sync_list, task_uuid=task_uuid, task_owner=task_owner, alf_script=alf_script)
+    submit(launch_type=launch_type, dep_file=dep_file, sync_list=sync_list, task_uuid=task_uuid, task_owner=task_owner, alf_script=alf_script, priority=priority, tactic_file=tactic_file, task_str=task_str)
 
 if __name__ == '__main__':
     main()

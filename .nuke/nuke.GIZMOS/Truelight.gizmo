@@ -1,0 +1,43 @@
+#! /usr/local/Nuke7.0v2/Nuke7.0 -nx
+version 7.0 v2
+Gizmo {
+ addUserKnob {20 Truelight}
+ addUserKnob {41 input_is_log l "raw log input" T Truelight4.input_is_log}
+ addUserKnob {41 output_raw l "raw Truelight output" T Truelight4.output_raw}
+ addUserKnob {41 channels T Truelight4.channels}
+ addUserKnob {41 display T Truelight4.display}
+ addUserKnob {41 enable_display l enable T Truelight4.enable_display}
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos 457
+  ypos -79
+ }
+ Truelight3 {
+  commands {display{SonyHD}
+greyValue{445,445,445}}
+  input_is_log true
+  output_raw true
+  display sRGB
+  profile /usr/local/Nuke7.0v2/plugins/truelight3/profiles/KodakVisionPremier
+  enable_display true
+  display_file /usr/local/Nuke7.0v2/plugins/truelight3/displays/monitor
+  lamp internal-Xenon
+  printer_points {0 0 0}
+  brightness 1
+  flare_correction 0.009999999776
+  white_u 0.1977999955
+  white_v 0.4683000147
+  name Truelight4
+  label "Truelight v3.0"
+  selected true
+  xpos 457
+  ypos -38
+ }
+ Output {
+  name Output1
+  xpos 457
+  ypos 61
+ }
+end_group

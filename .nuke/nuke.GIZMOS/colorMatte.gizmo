@@ -1,0 +1,60 @@
+#! /usr/local/Nuke7.0v2/Nuke7.0 -nx
+version 7.0 v2
+Gizmo {
+ tile_color 0xffbf00ff
+ addUserKnob {20 colorMatte}
+ addUserKnob {41 color T temp.color}
+ addUserKnob {41 refineEdge T temp.refineEdge}
+ addUserKnob {41 edgeBlur T temp.edgeBlur}
+ addUserKnob {41 invert T temp.invert}
+}
+ Input {
+  inputs 0
+  name Input
+  xpos -252
+  ypos -465
+ }
+ Expression {
+  expr0 "((temp.color == 0) * (r-g-b)) + ((temp.color == 1) * (g-r-b)) + ((temp.color == 2) * (b-r-g)) + ((temp.color == 3) * ((r*g)-b)) + ((temp.color == 4) * ((g*b)-r)) + ((temp.color == 5) * ((r*b)-g)) + ((temp.color == 6) * (r+g+b-2)) "
+  expr1 "((temp.color == 0) * (r-g-b)) + ((temp.color == 1) * (g-r-b)) + ((temp.color == 2) * (b-r-g)) + ((temp.color == 3) * ((r*g)-b)) + ((temp.color == 4) * ((g*b)-r)) + ((temp.color == 5) * ((r*b)-g)) + ((temp.color == 6) * (r+g+b-2)) "
+  expr2 "((temp.color == 0) * (r-g-b)) + ((temp.color == 1) * (g-r-b)) + ((temp.color == 2) * (b-r-g)) + ((temp.color == 3) * ((r*g)-b)) + ((temp.color == 4) * ((g*b)-r)) + ((temp.color == 5) * ((r*b)-g)) + ((temp.color == 6) * (r+g+b-2)) "
+  expr3 "((temp.color == 0) * (r-g-b)) + ((temp.color == 1) * (g-r-b)) + ((temp.color == 2) * (b-r-g)) + ((temp.color == 3) * ((r*g)-b)) + ((temp.color == 4) * ((g*b)-r)) + ((temp.color == 5) * ((r*b)-g)) + ((temp.color == 6) * (r+g+b-2)) "
+  name colorSel
+  xpos -252
+  ypos -412
+ }
+ Invert {
+  mix {{temp.invert}}
+  name Invert1
+  xpos -252
+  ypos -373
+ }
+ Gamma {
+  value {{(temp.refineEdge+1)*2}}
+  name Gamma1
+  xpos -252
+  ypos -334
+ }
+ Blur {
+  size {{temp.edgeBlur}}
+  name Blur1
+  xpos -252
+  ypos -285
+ }
+ Output {
+  name Output1
+  xpos -252
+  ypos -228
+ }
+ NoOp {
+  inputs 0
+  name temp
+  xpos -401
+  ypos -351
+  addUserKnob {20 temp}
+  addUserKnob {4 color M {Red Green Blue Yellow Cyan Magenta White "" ""}}
+  addUserKnob {7 refineEdge R -1 1}
+  addUserKnob {7 edgeBlur R 0 5}
+  addUserKnob {6 invert +STARTLINE}
+ }
+end_group

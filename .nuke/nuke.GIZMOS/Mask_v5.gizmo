@@ -1,0 +1,353 @@
+#! /usr/local/Nuke/Nuke6.3 -nx
+version 6.3 v4
+Gizmo {
+ help "Mask is a tool for generating guides and masks.  It can also crop to any aspect ratio you select.\n\nv5\n\nCreated by: john@johnmangia.com"
+ tile_color 0xff00ff
+ label "\[value this.aspectRatio]"
+ note_font Verdana
+ addUserKnob {20 Mask}
+ addUserKnob {52 getCropsPyScript T "showname = \[]\ncropX = \[]\ncropY = \[]\ncropR = \[]\ncropT = \[]\n\nfor line in open('/Users/John/Desktop/showcrops.txt','r'):\n    line = line.split(\",\")\n    showname.append(line\[0])\n    cropX.append(float(line\[1]))\n    cropY.append(float(line\[2]))\n    cropR.append(float(line\[3]))\n    cropT.append(float(line\[4]))" +STARTLINE}
+ addUserKnob {52 linkShowCropValuesPyScript T "def linkShowCropValues():\n n = nuke.thisNode()\n k = nuke.thisKnob()\n\n if k.name() == \"showCrop\":\n  n\['showCropX'.setValue(k.value())\n\nnuke.addKnobChanged(linkShowCropValues)" +STARTLINE}
+ addUserKnob {4 aspectRatio l "Aspect Ratio" M {" " 1.33 1.66 1.77 1.78 1.85 2.35 2.40}}
+ aspectRatio 2.35
+ addUserKnob {4 centering l " Centering" t "This setting controls where the \"Aspect Ratio\" mask starts from.\n\n\"Common Center\" will mask from the center.\n\n\"Common Top\" will generate the mask from the top of 2.35." -STARTLINE M {"Common Center" "Common Top" "" ""}}
+ addUserKnob {4 protectTo l "Protect To" M {" " 1.33 1.66 1.77 1.78 1.85 2.35 2.40}}
+ addUserKnob {4 centering2 l " Centering" t "This setting controls where the \"Protect To\" mask starts from.\n\n\"Common Center\" will mask from the center.\n\n\"Common Top\" will generate the mask from the top of 2.35." -STARTLINE M {"Common Center" "Common Top" "" ""}}
+ addUserKnob {26 ""}
+ addUserKnob {4 guideOrCrop l Guides/Letterbox/Crop M {Guides "Letterbox to Aspect Ratio" "Crop to Aspect Ratio" ""}}
+ addUserKnob {20 options l Options}
+ addUserKnob {7 lineThickness l "Line Thickness" R 1 5}
+ lineThickness 2
+ addUserKnob {7 aspectRatioFade l "Aspect Ratio Fade"}
+ aspectRatioFade 0.5
+ addUserKnob {7 protectToFade l "Protect To Fade"}
+ protectToFade 0.1
+ addUserKnob {6 showRatioLabels l "Show Ratio Labels" +STARTLINE}
+ showRatioLabels true
+}
+ BackdropNode {
+  inputs 0
+  name BackdropNode1
+  label "ASPECT RATIO GUIDE"
+  note_font "Verdana Bold"
+  note_font_size 20
+  xpos -1071
+  ypos 349
+  bdwidth 412
+  bdheight 439
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode2
+  label "PROTECT TO GUIDE"
+  note_font "Verdana Bold"
+  note_font_size 20
+  xpos -583
+  ypos 511
+  bdwidth 393
+  bdheight 445
+ }
+ Input {
+  inputs 0
+  name Input1
+  xpos -78
+  ypos 71
+ }
+ Dot {
+  name Dot1
+  xpos -44
+  ypos 217
+ }
+set N18be2e40 [stack 0]
+ Crop {
+  box {0 {"parent.aspectRatio>0&parent.centering>0?((Input1.height-((Input1.height-(Input1.width/1.85))/2))-(Input1.width/\[value parent.aspectRatio])):(Input1.height-(Input1.width/\[value parent.aspectRatio]))/2" i} {Input1.width-1 i} {"parent.aspectRatio>0&parent.centering>0?Input1.height-((Input1.height-(Input1.width/1.85))/2):height-((height-(width/\[value parent.aspectRatio]))/2)" i}}
+  reformat {{parent.guideOrCrop>1?1:0 i}}
+  name Crop1_letterAndHardCrop
+  xpos 12
+  ypos 309
+ }
+set N1cd0bec0 [stack 0]
+ Dot {
+  name Dot2
+  label CROPPED
+  xpos 180
+  ypos 429
+ }
+ Dot {
+  name Dot3
+  xpos 180
+  ypos 1336
+ }
+push $N1cd0bec0
+push $N18be2e40
+ Constant {
+  inputs 0
+  channels rgb
+  color {0.9 0.9 0.9 0}
+  name Constant1
+  xpos -676
+  ypos 21
+ }
+ Shuffle {
+  alpha white
+  name Shuffle1
+  xpos -676
+  ypos 95
+ }
+set N1cd20e80 [stack 0]
+ Crop {
+  box {0 {"((Input1.height-((Input1.height-(Input1.width/1.85))/2))-(Input1.width/\[value parent.protectTo]))" i} {Input1.width i} {Input1.height-((Input1.height-(Input1.width/1.85))/2) i}}
+  name Crop6_commonTop2
+  xpos -356
+  ypos 562
+ }
+push $N1cd20e80
+ Crop {
+  box {0 {"(Input1.height-(Input1.width/\[value parent.protectTo]))/2" i} {Input1.width i} {"Input1.height-((Input1.height-(Input1.width/\[value parent.protectTo]))/2)" i}}
+  name Crop4
+  xpos -533
+  ypos 563
+ }
+ Switch {
+  inputs 2
+  which {{parent.centering2 i}}
+  name Switch5
+  xpos -460
+  ypos 613
+ }
+set N18be76e0 [stack 0]
+ FilterErode {
+  size {{Input1.width<=2048?parent.lineThickness:parent.lineThickness*(trunc(Input1.width/1600)) i}}
+  name FilterErode2
+  xpos -542
+  ypos 703
+ }
+push $N18be76e0
+ Merge2 {
+  inputs 2
+  operation stencil
+  name Merge3
+  xpos -460
+  ypos 759
+ }
+ Reformat {
+  black_outside true
+  name Reformat3
+  xpos -460
+  ypos 808
+ }
+push $N18be76e0
+ Reformat {
+  black_outside true
+  name Reformat4
+  xpos -344
+  ypos 659
+ }
+ Invert {
+  name Invert2
+  xpos -344
+  ypos 697
+ }
+ Shuffle {
+  red alpha
+  green alpha
+  blue alpha
+  name Shuffle4
+  xpos -344
+  ypos 736
+ }
+push $N1cd20e80
+ Crop {
+  box {0 {"((Input1.height-((Input1.height-(Input1.width/1.85))/2))-(Input1.width/\[value parent.aspectRatio]))" i} {Input1.width i} {Input1.height-((Input1.height-(Input1.width/1.85))/2) i}}
+  name Crop6_commonTop
+  xpos -864
+  ypos 416
+ }
+push $N1cd20e80
+ Crop {
+  box {0 {"(Input1.height-(Input1.width/\[value parent.aspectRatio]))/2" i} {Input1.width i} {"Input1.height-((Input1.height-(Input1.width/\[value parent.aspectRatio]))/2)" i}}
+  name Crop3_commonCenter
+  xpos -1040
+  ypos 415
+ }
+ Switch {
+  inputs 2
+  which {{parent.centering i}}
+  name Switch3
+  xpos -956
+  ypos 463
+ }
+set N1cd868e0 [stack 0]
+ FilterErode {
+  size {{Input1.width<=2048?parent.lineThickness:parent.lineThickness*(trunc(Input1.width/1600)) i}}
+  name FilterErode1
+  xpos -1040
+  ypos 507
+ }
+push $N1cd868e0
+ Merge2 {
+  inputs 2
+  operation stencil
+  name Merge1
+  xpos -956
+  ypos 595
+ }
+ Reformat {
+  black_outside true
+  name Reformat1
+  xpos -956
+  ypos 643
+ }
+push $N1cd868e0
+ Reformat {
+  black_outside true
+  name Reformat2
+  xpos -840
+  ypos 495
+ }
+ Invert {
+  name Invert1
+  xpos -840
+  ypos 533
+ }
+ Shuffle {
+  red alpha
+  green alpha
+  blue alpha
+  name Shuffle2
+  xpos -840
+  ypos 572
+ }
+push $N18be2e40
+ Multiply {
+  inputs 1+1
+  value {{parent.aspectRatioFade i}}
+  name Multiply1
+  xpos -840
+  ypos 667
+ }
+ Merge2 {
+  inputs 2
+  name Merge2
+  xpos -956
+  ypos 732
+ }
+set N1cdddfa0 [stack 0]
+ Text {
+  opacity {{parent.showRatioLabels==1&parent.aspectRatio>0?1:0 i}}
+  message "\[value parent.aspectRatio] \[value parent.centering]"
+  font /usr/share/fonts/dejavu/DejaVuSansCondensed.ttf
+  size {{trunc(Input1.height/50) i}}
+  Transform 1
+  translate {15 {"parent.centering>0?((Input1.height-((Input1.height-(Input1.width/1.85))/2))-(Input1.width/\[value parent.aspectRatio]))+10:0" i}}
+  name Text3
+  xpos -901
+  ypos 779
+ }
+push $N1cdddfa0
+ Text {
+  opacity {{parent.showRatioLabels==1&parent.aspectRatio>0?1:0 i}}
+  message "\[value parent.aspectRatio]"
+  font /usr/share/fonts/dejavu/DejaVuSansCondensed.ttf
+  size {{trunc(Input1.height/50) i}}
+  translate {15 {"\[value parent.aspectRatio]>0?(((Input1.height-(Input1.width/\[value parent.aspectRatio]))/2)+10):0" i}}
+  name Text1
+  xpos -1016
+  ypos 780
+ }
+ Switch {
+  inputs 2
+  which {{parent.centering i}}
+  name Switch4
+  xpos -956
+  ypos 852
+ }
+push $N18be2e40
+ Switch {
+  inputs 2
+  which {{parent.aspectRatio>0?1:0 i}}
+  name Switch6_aspectOnOff
+  xpos -956
+  ypos 946
+ }
+set N1cdee7b0 [stack 0]
+ Multiply {
+  inputs 1+1
+  value {{parent.protectToFade i}}
+  name Multiply2
+  xpos -344
+  ypos 846
+ }
+ Merge2 {
+  inputs 2
+  name Merge4
+  xpos -460
+  ypos 905
+ }
+set N1cdf6380 [stack 0]
+ Text {
+  opacity {{parent.showRatioLabels==1&parent.protectTo>0?1:0 i}}
+  message "\[value parent.protectTo] \[value parent.centering2]"
+  font /usr/share/fonts/dejavu/DejaVuSansCondensed.ttf
+  size {{trunc(Input1.height/50) i}}
+  Transform 1
+  translate {15 {"parent.centering2>0?((Input1.height-((Input1.height-(Input1.width/1.85))/2))-(Input1.width/\[value parent.protectTo]))+10:0" i}}
+  name Text4
+  xpos -412
+  ypos 949
+ }
+push $N1cdf6380
+ Text {
+  opacity {{parent.showRatioLabels==1&parent.protectTo>0?1:0 i}}
+  message "\[value parent.protectTo]"
+  font /usr/share/fonts/dejavu/DejaVuSansCondensed.ttf
+  size {{trunc(Input1.height/50) i}}
+  Transform 1
+  translate {15 {"\[value parent.protectTo]>0?(((Input1.height-(Input1.width/\[value parent.protectTo]))/2)+10):0" i}}
+  name Text2
+  xpos -518
+  ypos 949
+ }
+ Switch {
+  inputs 2
+  which {{parent.centering2>0&parent.protectTo>0?1:0 i}}
+  name Switch6
+  xpos -460
+  ypos 1026
+ }
+push $N1cdee7b0
+ Switch {
+  inputs 2
+  which {{parent.protectTo>0?1:0 i}}
+  name Switch2
+  xpos -460
+  ypos 1080
+ }
+ Switch {
+  inputs 2
+  which {{parent.aspectRatio>0||parent.protectTo>0||parent.showCrop>0?0:1 i}}
+  name Switch3_bypassGuidesAndCrops
+  xpos -343
+  ypos 1245
+ }
+ Switch {
+  inputs 3
+  which {{parent.aspectRatio>0?parent.guideOrCrop:0 i}}
+  name Switch1
+  xpos 12
+  ypos 1442
+ }
+set N16510660 [stack 0]
+ Output {
+  name Output1
+  xpos 12
+  ypos 1569
+ }
+push $N16510660
+ Viewer {
+  input_process false
+  name Viewer1
+  xpos 12
+  ypos 1468
+ }
+end_group

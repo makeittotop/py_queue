@@ -15,491 +15,7 @@ app = Celery('task_queue.tasks')
 app.config_from_object('task_queue.celeryconfig')
 
 QUE_SUBMIT_BIN = 'bin/submit_to_queue.py'
-
-@app.task
-@register_task_logger(__name__)
-class SpoolTask(Task):
-    def db_insert_task(self, task_id, status='active'):
-        db_obj = QueueDb()
-        client = db_obj.client()
-        # collection
-        task_collection = client.queue.tasks
-
-        self.log.info("+++++++++++++++++++++")
-        self.log.info("task_id: {0}".format(task_id))
-        self.log.info("+++++++++++++++++++++")
-        
-        task_doc = task_collection.find_one({'task_id' : task_id})
-        if not task_doc:
-            task_doc = {}
-            task_doc['task_id'] = task_id
-            task_doc['spool_id'] = self.request.id
-
-        task_doc['spool_start'] = datetime.datetime.now()
-        task_doc['spool_status'] = status
-
-        task_collection.save(task_doc)
-
-
-    def db_update_task(self, task_id, status='done', **kwargs) :
-        db_obj = QueueDb()
-        client = db_obj.client()
-        # collection
-        task_collection = client.queue.tasks
-
-        task_doc = task_collection.find_one({'task_id' : task_id})
-        if not task_doc:
-            task_doc = {}
-            task_doc['task_id'] = task_id
-
-        # Fetch a collection
-        task_doc['spool_stop'] = datetime.datetime.now()
-        task_doc['spool_status'] = status
-
-        if status == 'failed':
-            task_doc['spool_exception'] = kwargs.get('exc')
-            task_doc['spool_einfo'] = kwargs.get('einfo')
-        else:
-            task_doc['spool_retval'] = kwargs.get('retval')
-
-        # save
-        task_collection.save(task_doc)
-
-    def run(self, task_owner, engine, priority, alf_script, task_uuid, unique_id, dep_file, operation):
-        task_id = self.request.id
-        self.task_uuid = task_uuid
-
-        self.task_owner = task_owner
-        self.unique_id = unique_id
-        self.dep_file = dep_file
-        self.operation = operation
-        self.alf_script = alf_script
-
-        cmd = "task_queue.rfm.tractor.Spool(['--user={0}', --engine={1}', '--priority={2}', '{3}'])".format(task_owner, engine, priority, alf_script)
-        self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
-
-        #db_insert_task
-        self.log.info("[{0}]: Inserting into the db: spool".format(task_id))
-        self.db_insert_task(self.task_uuid)
-
-        # Execute `cmd`
-        import task_queue.rfm.tractor
-        import json
-        retval = task_queue.rfm.tractor.Spool(['--user={0}'.format(task_owner), '--engine={0}'.format(engine), '--priority={0}'.format(priority), '{0}'.format(alf_script)])
-        self.log.info("[{0}]: Finish command: {1}".format(task_id, cmd))
-        # Get the jid
-        task_jid = json.loads(retval).get('jid')
-
-        # Connect to the tractor engine in China, for now via the proxy in sgp
-        tq.setEngineClientParam(hostname="54.169.63.110", port=1503, user=task_owner, debug=True)
-        # Add the upload task ID as metadata to the task
-        metadata = task_id.split('-')[1]
-        tq.jattr('jid={0}'.format(task_jid), key='metadata', value=metadata)
-        tq.closeEngineClient()
-        self.log.info("[{0}]: Updated {1} with metadata: {2}".format(task_id, task_jid, metadata))
-
-        self.log.info("[{0}]: Finish command: {1}".format(task_id, cmd))
-
-        #db_update_task
-        self.log.info("[{0}]: Updating the db: spool".format(task_id))
-        self.db_update_task(self.task_uuid, retval=retval)
-
-        return task_jid
-
-    def on_success(self, retval, task_id, args, kwargs):
-        # SEND SPOOL COMPLETE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)
-        mail_obj.send_()
-        self.log.info("[{0}]: SPOOL COMPLETE MAIL SENT".format(task_id))
-
-    def on_failure(self, exc, task_id, args, kwargs, einfo):
-        msg = "[{0}]: Spooling failed: {1}".format(task_id, exc.message)
-        self.log.info(msg)
-
-        #db_update_task
-        self.log.info("[{0}]: Updating the db: spool".format(task_id))
-        self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
-
-        # SEND FAIL MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='SPOOL_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send_()
-
-@app.task
-@register_task_logger(__name__)
-class SyncTask(Task):
-    def db_insert_task(self, task_id, task_owner, status='active'):
-        db_obj = QueueDb()
-        client = db_obj.client()
-        # collection
-        task_collection = client.queue.tasks
-
-        self.log.info("+++++++++++++++++++++")
-        self.log.info("task_id: {0}".format(task_id))
-        self.log.info("+++++++++++++++++++++")
-        
-        task_doc = task_collection.find_one({'task_id' : task_id})
-        if not task_doc:
-            task_doc = {}
-            task_doc['task_id'] = task_id
-            task_doc['sync_id'] = self.request.id
-
-        task_doc['sync_start'] = datetime.datetime.now()
-        task_doc['sync_status'] = status
-
-        task_collection.save(task_doc)
-
-        """
-        db_obj = QueueDb()
-        client = db_obj.client()
-        # collection
-        task_collection = client.queue.tasks
-
-        task_doc = {}
-        task_doc['task_id'] = task_id
-        task_doc['sync_start'] = datetime.datetime.now()
-        task_doc['sync_status'] = status
-        task_doc['task_owner'] = task_owner
-
-        task_collection.insert(task_doc)
-        """
-
-    def db_update_task(self, task_id, status='done', **kwargs) :
-        db_obj = QueueDb()
-        client = db_obj.client()
-        # collection
-        task_collection = client.queue.tasks
-
-        # Fetch a collection
-        task_doc = task_collection.find_one({'task_id' : task_id})
-        task_doc['sync_stop'] = datetime.datetime.now()
-        task_doc['sync_status'] = status
-
-        if status == 'failed':
-            task_doc['sync_exception'] = kwargs.get('exc')
-            task_doc['sync_einfo'] = kwargs.get('einfo')
-        else:
-            task_doc['sync_retval'] = kwargs.get('retval')
-
-        # save
-        task_collection.save(task_doc)
-
-    def run(self, task_owner, dep_file_path, cmd, task_uuid, unique_id, alf_script, operation):
-        task_id = self.request.id
-        self.task_uuid = task_uuid
-
-        self.task_owner = task_owner
-        self.dep_file_path = dep_file_path
-        self.unique_id = unique_id
-        self.alf_script = alf_script
-        self.operation = operation
-
-        #db_insert_task
-        self.log.info("[{0}]: Inserting the db: sync".format(task_id))
-        self.db_insert_task(self.task_uuid, task_owner)
-
-        # SEND SUBMIT MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_START', task_id=task_id, task_uuid=self.task_uuid, dep_file_path=dep_file_path, cmd=cmd)
-        mail_obj.send_()
-        self.log.info("[{0}]: UPLOAD START MAIL SENT".format(task_id))
-
-        self.log.info("[{0}]: Dep file: {1}".format(task_id, dep_file_path))
-        self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
-
-        retval = self.exec_cmd(task_id, cmd)
-        self.log.info("[{0}]: Finish command: {1}".format(task_id, cmd))
-
-        #db_update_task
-        self.log.info("[{0}]: Updating the db: sync".format(task_id))
-        self.db_update_task(self.task_uuid, retval=retval)
-
-        return "Upload Success!"
-               
-        '''
-        else:
-            # raise an error
-            msg = "[{0}]: Sync failed: {0}".format(task_id)
-            self.log.info(msg)
-
-            #db_update_task
-
-            raise TaskException(msg)
-            try:
-                msg = "[{0}]: Sync failed: {0}".format(task_id)
-                self.log.info(msg)
-                raise TaskException(msg)
-            except TaskException as exc:
-                pass
-                #self.retry(exc=exc, countdown=5)
-        '''
-
-    def on_success(self, retval, task_id, args, kwargs):
-        # SEND DONE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)        
-        mail_obj.send_()
-        self.log.info("[{0}]: UPLOAD COMPLETE MAIL SENT".format(task_id))
-
-    def on_failure(self, exc, task_id, args, kwargs, einfo):
-        msg = "[{0}]: Sync failed: {1}".format(task_id, exc.message) 
-        self.log.info(msg)
-
-        #db_update_task
-        self.log.info("[{0}]: Updating the db: sync".format(task_id))
-        self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
- 
-        # SEND FAIL MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='UPLOAD_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send_()
-        self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
-
-    def exec_cmd(self, task_id, cmd):
-        thread = pexpect.spawn(cmd)
-
-        self.log.info("[[{0}]: (thread) START]".format(task_id))
-
-        cpl = thread.compile_pattern_list([pexpect.EOF,
-						   '(.*)'])
-        self.error_count = 0
-        self.errors = []
-        self.err_critical = False
-        while True:
-            i = thread.expect_list(cpl, timeout=None)
-	    if i == 0: # EOF
-		self.log.info("[[{0}]: (thread) STOP]".format(task_id))
-		break
-	    elif i == 1:
-		progress_output = thread.match.group(1)
-                progress_output = progress_output.strip()
-
-		self.log.info("[{0}]: {1}".format(task_id, progress_output))
-
-		#We need to mine data for errors very carefully.
-		#In case there is an error, we need to keep the task going to completion
-		#But make sure that the 'CHAIN' shouldn't propogate further i.e. 'RENDER'
-		#threads mustn't launch
-                po_words = map(lambda x: x.lower(), progress_output.split('\s'))
-                for word in po_words:
-                    '''
-                    if 'eagain' in word:
-                #if re.match(r'.*error.*', progress_output, flags=re.IGNORECASE):
-                    #if re.match(r'.*eagain.*', progress_output, flags=re.IGNORECASE):
-                        # Session Stop  (Error: Session shutdown failed, Tried to write different output after EAGAIN)
-                        self.log.info("[{0}]: Detected a CRITICAL error in the transfer stream, aborting: {1}".format(task_id, progress_output))
-			self.error_count += 1
-			self.errors.append(progress_output)
-                        self.err_critical = True
-                        break
-                    '''
-                    if 'error' in word:
-                        self.log.info("[{0}]: Detected a critical error in the transfer stream, aborting: {1}".format(task_id, progress_output))
-			self.error_count += 1
-			self.errors.append(progress_output)
-                        self.err_critical = True
-                        break
-            if self.err_critical:
-                break
-
-	thread.close()
-
-        if not self.error_count:
-            return 0
-        else:
-            raise TaskException(self.errors[0])
-            
-
-    def send_mail(**kwargs):
-        mail_obj = Mail(**kwargs)        
-        mail_obj.send_()
-        self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
-         
-@app.task
-@register_task_logger(__name__)
-class DownloadTask(Task):
-    def db_insert_task(self, task_id, status='active'):
-        db_obj = QueueDb()
-        client = db_obj.client()
-        # collection
-        task_collection = client.queue.tasks
-
-        self.log.info("+++++++++++++++++++++")
-        self.log.info("task_id: {0}".format(task_id))
-        self.log.info("+++++++++++++++++++++")
-        
-        task_doc = task_collection.find_one({'task_id' : task_id})
-        if not task_doc:
-            task_doc = {}
-            task_doc['task_id'] = task_id
-            task_doc['download_id'] = self.request.id
-
-        task_doc['download_start'] = datetime.datetime.now()
-        task_doc['download_status'] = status
-
-        task_collection.save(task_doc)
-
-
-    def db_update_task(self, task_id, status='done', **kwargs) :
-        db_obj = QueueDb()
-        client = db_obj.client()
-        # collection
-        task_collection = client.queue.tasks
-
-        task_doc = task_collection.find_one({'task_id' : task_id})
-        if not task_doc:
-            task_doc = {}
-            task_doc['task_id'] = task_id
-
-  
-        # Fetch a collection
-        task_doc['download_stop'] = datetime.datetime.now()
-        task_doc['download_status'] = status
-
-        if status == 'failed':
-            task_doc['download_exception'] = kwargs.get('exc')
-            task_doc['download_einfo'] = kwargs.get('einfo')
-        else:
-            task_doc['download_retval'] = kwargs.get('retval')
-
-        # save
-        task_collection.save(task_doc)
-
-    def run(self, task_owner, task_uuid):
-        task_id = self.request.id
-        self.task_uuid = task_uuid
-
-        self.log.info("[{0}]: Received task_id: {1}".format(task_id, self.task_uuid))
-        self.log.info("[{0}]: Received task_uuid: {1}".format(self.task_uuid, self.task_uuid))
-
-        self.task_owner = task_owner
-
-        #db_insert_task
-        self.db_insert_task(self.task_uuid)
-
-        seq_str, _ = self.task_uuid.split('__')
-        items = seq_str.split('_')
-        seq = items[0]
-        scn = items[1]
-        shot = items[2]
-        ver = items[5]
-
-        # ascp -O 33001 -P 33001 -k 3 -p --overwrite=diff -d render@fox:/Tactic/bilal/render/$1/$2/$3/cg/$4 /nas/projects/Tactic/bilal/render/$1/$2/$3/cg/ #
-        #cmd = "ascp -O 33001 -P 33001 -k 3 -p --overwrite=diff -d render@fox:/Tactic/bilal/render/{0}/{1}/{2}/cg/{3} /nas/projects/Tactic/bilal/render/{0}/{1}/{2}/cg/".format(seq, scn, shot, ver)
-        cmd = "ascp -O 33001 -P 33001 -k 3 -p --overwrite=diff -d render@54.169.63.110:/Tactic/bilal/render/{0}/{1}/{2}/cg/{3} /nas/projects/Tactic/bilal/render/{0}/{1}/{2}/cg/".format(seq, scn, shot, ver)
-        self.log.info("[{0}]: Running cmd: {1}".format(task_id, cmd))
-
-        test_cmd = "/bin/bash -c \"echo {0}\"".format(cmd)
-
-        # SEND SUBMIT MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_START', task_id=task_id, task_uuid=self.task_uuid)
-        mail_obj.send_()
-        self.log.info("[{0}]: DOWNLOAD START MAIL SENT".format(task_id))
-
-        #self.log.info("[{0}]: Dep file: {1}".format(task_id, dep_file_path))
-        self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
-
-        retval = self.exec_cmd(task_id, cmd)
-        self.log.info("[{0}]: Finish command: {1}".format(task_id, cmd))
-
-        #db_update_task
-        self.db_update_task(self.task_uuid, retval=retval)
-
-        return "Download Success!"
-
-        """
-        if retval == 0:
-            #msg = "[{0}]: Sync successful".format(task_id)
-            #self.log.info(msg)
-            return task_id
-        else:
-            # raise an error
-            msg = "[{0}]: Download failed: {0}".format(task_id)
-            self.log.info(msg)
-            raise TaskException(msg)
-            '''
-            try:
-                msg = "[{0}]: Sync failed: {0}".format(task_id)
-                self.log.info(msg)
-                raise TaskException(msg)
-            except TaskException as exc:
-                pass
-                #self.retry(exc=exc, countdown=5)
-            '''
-        """  
-
-    def on_success(self, retval, task_id, args, kwargs):
-        # SEND DONE MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_COMPLETE', task_id=task_id, task_uuid=self.task_uuid, retval=retval)        
-        mail_obj.send_()
-        self.log.info("[{0}]: DOWNLOAD COMPLETE MAIL SENT".format(task_id))
-
-    def on_failure(self, exc, task_id, args, kwargs, einfo):
-        msg = "[{0}]: Download failed: {1}".format(task_id, exc.message)
-        self.log.info(msg)
-
-        #db_update_task
-        self.db_update_task(self.task_uuid, 'failed', exc=exc.message)
-
-        # SEND FAIL MAIL
-        mail_obj = Mail(task_owner=self.task_owner, mail_type='DOWNLOAD_FAIL', exc=exc, task_id=task_id, task_uuid=self.task_uuid, einfo=einfo)        
-        mail_obj.send_()
-        self.log.info("[{0}]: DOWNLOAD FAIL MAIL SENT".format(task_id))
-
-    def exec_cmd(self, task_id, cmd):
-        thread = pexpect.spawn(cmd)
-
-        self.log.info("[[{0}]: (thread) START]".format(task_id))
-
-        cpl = thread.compile_pattern_list([pexpect.EOF,
-						   '(.*)'])
-        self.error_count = 0
-        self.errors = []
-        self.err_critical = False
-        while True:
-            i = thread.expect_list(cpl, timeout=None)
-	    if i == 0: # EOF
-		self.log.info("[[{0}]: (thread) STOP]".format(task_id))
-		break
-	    elif i == 1:
-		progress_output = thread.match.group(1)
-                progress_output = progress_output.strip()
-
-		self.log.info("[{0}]: {1}".format(task_id, progress_output))
-
-		#We need to mine data for errors very carefully.
-		#In case there is an error, we need to keep the task going to completion
-		#But make sure that the 'CHAIN' shouldn't propogate further i.e. 'RENDER'
-		#threads mustn't launch
-                po_words = map(lambda x: x.lower(), progress_output.split('\s'))
-                for word in po_words:
-                    '''
-                    if 'eagain' in word:
-                #if re.match(r'.*error.*', progress_output, flags=re.IGNORECASE):
-                    #if re.match(r'.*eagain.*', progress_output, flags=re.IGNORECASE):
-                        # Session Stop  (Error: Session shutdown failed, Tried to write different output after EAGAIN)
-                        self.log.info("[{0}]: Detected a CRITICAL error in the transfer stream, aborting: {1}".format(task_id, progress_output))
-			self.error_count += 1
-			self.errors.append(progress_output)
-                        self.err_critical = True
-                        break
-                    '''
-                    if 'error' in word:
-                        self.log.info("[{0}]: Detected an error in the transfer stream: {1}".format(task_id, progress_output))
-			self.error_count += 1
-			self.errors.append(progress_output)
-                        self.err_critical = True
-                        break
-            if self.err_critical:
-                break
-  
-	thread.close()
-
-        if not self.error_count:
-            return 0
-        else:
-            raise TaskException(self.errors[0])
-
-    def send_mail(**kwargs):
-        mail_obj = Mail(**kwargs)        
-        mail_obj.send_()
-        self.log.info("[{0}]: DOWNLOAD FAIL MAIL SENT".format(task_id))
+FIX_MAYA_FILE_BIN = "/nas/projects/development/productionTools/pipeline.config/fix_maya_version.py"
 
 @app.task
 @register_task_logger(__name__)
@@ -591,7 +107,6 @@ class UploadTestTask(Task):
 
         # First try 
         if count == 0:
-            #db_insert_task
             self.log.info("[{0}]: Inserting the db: upload".format(task_id))
             self.db_insert_task(self.task_uuid, task_owner)
 
@@ -607,7 +122,7 @@ class UploadTestTask(Task):
            self.log.info("[{0}]: Retry # {1}, task_uuid {2}".format(task_id, count, self.task_uuid)) 
  
            #7. DB update
-           self.db_update_task(self.task_uuid, 'active', count=count)
+           #self.db_update_task(self.task_uuid, 'active', count=count)
 
         try:
             self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
@@ -623,7 +138,8 @@ class UploadTestTask(Task):
             #4. Retry if not user aborted
             if self.error_type is not None and self.error_type != 'user_abort':
                 #8. DB update
-                self.db_update_task(self.task_uuid, 'failed', count=count, exc=e.message)
+                #self.db_update_task(self.task_uuid, 'failed', count=count, exc=e.message)
+                self.db_update_task(self.task_uuid, 'retry', count=count, exc=e.message)
                 self.retry(args=[task_owner, dep_file_path, cmd, task_uuid, unique_id, alf_script, operation, count+1], exc=e, kwargs=kwargs)
             elif self.error_type == 'user_abort':
                 raise TaskException(e.message)
@@ -678,7 +194,7 @@ class UploadTestTask(Task):
         mail_obj.send_()
         self.log.info("[{0}]: UPLOAD FAIL MAIL SENT".format(task_id))
 
-    def db_insert_task(self, task_id, status='active'):
+    def db_insert_task(self, task_id, task_owner, status='active'):
         db_obj = QueueDb()
         client = db_obj.client()
         # collection
@@ -698,6 +214,7 @@ class UploadTestTask(Task):
 
         task_doc['upload_start'] = datetime.datetime.now()
         task_doc['upload_status'] = status
+        task_doc['upload_retry_count'] = 0
 
         task_collection.save(task_doc)
 
@@ -724,14 +241,15 @@ class UploadTestTask(Task):
                 task_doc['upload_retry_count'] = retry_count
                 task_doc['upload_retry_{0}_start'.format(retry_count)] = datetime.datetime.now()
                 task_doc['upload_retry_{0}_status'.format(retry_count)] = status
-            elif status == 'failed':
+            elif status == 'failed' or status == 'retry':
                 task_doc['upload_retry_{0}_stop'.format(retry_count)] = datetime.datetime.now()
                 task_doc['upload_retry_{0}_status'.format(retry_count)] = status 
+                task_doc['upload_status'] = status
                 task_doc['upload_retry_{0}_exception'.format(retry_count)] = kwargs.get('exc')
                 task_doc['upload_retry_{0}_einfo'.format(retry_count)] = kwargs.get('einfo')
-                if retry_count == 2 or self.error_type == 'user_abort':
-                    task_doc['upload_exception'] = kwargs.get('exc')
-                    task_doc['upload_einfo'] = kwargs.get('einfo')
+                #if retry_count == 2 or self.error_type == 'user_abort':
+                    #task_doc['upload_exception'] = kwargs.get('exc')
+                    #task_doc['upload_einfo'] = kwargs.get('einfo')
             elif status == 'done':
                 task_doc['upload_retry_{0}_status'.format(retry_count)] = status
                 task_doc['upload_retry_{0}_stop'.format(retry_count)] = datetime.datetime.now()
@@ -743,7 +261,8 @@ class UploadTestTask(Task):
                 task_doc['upload_stop'] = datetime.datetime.now()
                 task_doc['upload_status'] = status
                 task_doc['upload_retval'] = kwargs.get('retval')
-            elif status == 'failed' and self.error_type == 'user_abort':
+            #elif status == 'failed' and self.error_type == 'user_abort':
+            elif status == 'failed' or status == 'retry':
                 task_doc['upload_status'] = status
                 task_doc['upload_exception'] = kwargs.get('exc')
                 task_doc['upload_einfo'] = kwargs.get('einfo')
@@ -771,7 +290,7 @@ class SpoolTestTask(Task):
     max_retries = 3
     default_retry_delay = 3
 
-    def run(self, task_owner, engine, priority, alf_script, task_uuid, unique_id, dep_file, operation, count, **kwargs):
+    def run(self, task_owner, engine, priority, alf_script, task_uuid, unique_id, dep_file, operation, tactic_file, task_str, count, **kwargs):
         task_id = self.request.id
         self.task_uuid = task_uuid
 
@@ -782,29 +301,43 @@ class SpoolTestTask(Task):
         self.dep_file = dep_file
         self.operation = operation
         self.alf_script = alf_script
+        self.tactic_file = tactic_file
+        self.task_str = task_str
 
         # First try 
         if count == 0:
-            #db_insert_task
             self.log.info("[{0}]: Inserting into the db: spool".format(task_id))
             self.db_insert_task(self.task_uuid)
         # Retry
         else:
            #6. Retry log
            self.log.info("[{0}]: Retry # {1}, task_uuid {2}".format(task_id, count, self.task_uuid)) 
- 
-           #7. DB update
-           self.db_update_task(self.task_uuid, 'active', count=count)
 
         try:
-            cmd = "task_queue.rfm.tractor.Spool(['--user={0}', --engine={1}', '--priority={2}', '{3}'])".format(task_owner, engine, priority, alf_script)
+            cmd = "task_queue.rfm.tractor.Spool(['--user={0}', --engine={1}', '--priority={2}', '{3}'])".format(task_owner, engine, priority, alf_script, tactic_file, task_str)
             self.log.info("[{0}]: Start command: {1}".format(task_id, cmd))
 
-            #db_insert_task
-            self.log.info("[{0}]: Inserting into the db: spool".format(task_id))
-            self.db_insert_task(self.task_uuid)
-
             # Execute `cmd`
+            import paramiko
+
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect('119.81.131.43', port=7001, username='root', password='barajoun@2014')
+
+            cmd = "{0} {1} {2};chown render:render {1};chmod 777 {1}".format(FIX_MAYA_FILE_BIN, self.tactic_file, self.task_str)
+            print >>sys.stderr, "Executing cmd: ", cmd
+
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+
+            stdout_msg = stdout.readlines()
+            stderr_msg = stderr.readlines()
+
+            print >>sys.stderr, 'STDOUT: ', stdout_msg
+            print >>sys.stderr, 'STDERR: ', stderr_msg
+            
+            self.log.info("[{0}]: FIX_MAYA_FILE_BIN stdout: {1}".format(task_id, stdout_msg))
+            self.log.info("[{0}]: FIX_MAYA_FILE_BIN stderr: {1}".format(task_id, stderr_msg))
+
             import task_queue.rfm.tractor
             import json
             retval = task_queue.rfm.tractor.Spool(['--user={0}'.format(task_owner), '--engine={0}'.format(engine), '--priority={0}'.format(priority), '{0}'.format(alf_script)])
@@ -812,7 +345,7 @@ class SpoolTestTask(Task):
             task_jid = json.loads(retval).get('jid')
 
             # Connect to the tractor engine in China, for now via the proxy in sgp
-            tq.setEngineClientParam(hostname="54.169.63.110", port=1503, user=task_owner, debug=True)
+            tq.setEngineClientParam(hostname="119.81.131.43", port=1503, user=task_owner, debug=True)
             # Add the upload task ID as metadata to the task
             metadata = task_id.split('-')[1]
             tq.jattr('jid={0}'.format(task_jid), key='metadata', value=metadata)
@@ -832,8 +365,8 @@ class SpoolTestTask(Task):
             '''
         except Exception as e:
             #8. DB update
-            self.db_update_task(self.task_uuid, 'failed', count=count, exc=e.message)
-            self.retry(args=[task_owner, engine, priority, alf_script, task_uuid, unique_id, dep_file, operation, count+1], exc=e, kwargs=kwargs)
+            self.db_update_task(self.task_uuid, 'retry', count=count, exc=e.message)
+            self.retry(args=[task_owner, engine, priority, alf_script, task_uuid, unique_id, dep_file, operation, tactic_file, task_str, count+1], exc=e, kwargs=kwargs)
 
         """
         if retval == 0:
@@ -906,6 +439,7 @@ class SpoolTestTask(Task):
 
         task_doc['spool_start'] = datetime.datetime.now()
         task_doc['spool_status'] = status
+        task_doc['spool_retry_count'] = 0
 
         task_collection.save(task_doc)
 
@@ -932,9 +466,10 @@ class SpoolTestTask(Task):
                 task_doc['spool_retry_count'] = retry_count
                 task_doc['spool_retry_{0}_start'.format(retry_count)] = datetime.datetime.now()
                 task_doc['spool_retry_{0}_status'.format(retry_count)] = status
-            elif status == 'failed':
+            elif status == 'failed' or status == 'retry':
                 task_doc['spool_retry_{0}_stop'.format(retry_count)] = datetime.datetime.now()
                 task_doc['spool_retry_{0}_status'.format(retry_count)] = status 
+                task_doc['spool_status'] = status
                 task_doc['spool_retry_{0}_exception'.format(retry_count)] = kwargs.get('exc')
                 task_doc['spool_retry_{0}_einfo'.format(retry_count)] = kwargs.get('einfo')
                 if retry_count == 2 or self.error_type == 'user_abort':
@@ -951,7 +486,7 @@ class SpoolTestTask(Task):
                 task_doc['spool_stop'] = datetime.datetime.now()
                 task_doc['spool_status'] = status
                 task_doc['spool_retval'] = kwargs.get('retval')
-            elif status == 'failed' and self.error_type == 'user_abort':
+            elif status == 'failed' or status == 'retry':
                 task_doc['spool_exception'] = kwargs.get('exc')
                 task_doc['spool_status'] = status
                 task_doc['spool_einfo'] = kwargs.get('einfo')
@@ -1077,7 +612,6 @@ class DownloadTestTask(Task):
             self.log.info("[{0}]: Received task_uuid: {1}".format(self.task_uuid, self.task_uuid))
 
             #1.  DB insert
-            #db_insert_task
             self.db_insert_task(self.task_uuid)
 
             #2. SEND SUBMIT MAIL
@@ -1090,12 +624,12 @@ class DownloadTestTask(Task):
            self.log.info("[{0}]: Retry # {1}, task_uuid {2}".format(task_id, count, self.task_uuid)) 
  
            #7. DB update
-           self.db_update_task(self.task_uuid, 'active', count=count)
+           #self.db_update_task(self.task_uuid, 'active', count=count)
 
         #3. Command run
         # ascp -O 33001 -P 33001 -k 3 -p --overwrite=diff -d render@fox:/Tactic/bilal/render/$1/$2/$3/cg/$4 /nas/projects/Tactic/bilal/render/$1/$2/$3/cg/ #
         #cmd = "ascp -O 33001 -P 33001 -k 3 -p --overwrite=diff -d render@fox:/Tactic/bilal/render/{0}/{1}/{2}/cg/{3} /nas/projects/Tactic/bilal/render/{0}/{1}/{2}/cg/".format(seq, scn, shot, ver)
-        cmd = "ascp -O 33001 -P 33001 -k 3 -p --overwrite=diff -d render@54.169.63.110:/Tactic/bilal/render/{0}/{1}/{2}/cg/{3} /nas/projects/Tactic/bilal/render/{0}/{1}/{2}/cg/".format(seq, scn, shot, ver)
+        cmd = "ascp -O 33001 -P 33001 -k 3 -p --overwrite=diff -d render@119.81.131.43:/Tactic/bilal/render/{0}/{1}/{2}/cg/{3} /nas/projects/Tactic/bilal/render/{0}/{1}/{2}/cg/".format(seq, scn, shot, ver)
         #self.log.info("[{0}]: Running cmd: {1}".format(task_id, cmd))
 
         try:
@@ -1108,7 +642,7 @@ class DownloadTestTask(Task):
             #4. Retry if not user aborted
             if self.error_type is not None and self.error_type != 'user_abort':
                 #8. DB update
-                self.db_update_task(self.task_uuid, 'failed', count=count, exc=e.message)
+                self.db_update_task(self.task_uuid, 'retry', count=count, exc=e.message)
                 self.retry(args=[task_owner, task_uuid, count+1], exc=e, kwargs=kwargs)
             elif self.error_type == 'user_abort':
                 raise TaskException(e.message)
@@ -1183,6 +717,7 @@ class DownloadTestTask(Task):
 
         task_doc['download_start'] = datetime.datetime.now()
         task_doc['download_status'] = status
+        task_doc['download_retry_count'] = 0
 
         task_collection.save(task_doc)
 
@@ -1209,14 +744,15 @@ class DownloadTestTask(Task):
                 task_doc['download_retry_count'] = retry_count
                 task_doc['download_retry_{0}_start'.format(retry_count)] = datetime.datetime.now()
                 task_doc['download_retry_{0}_status'.format(retry_count)] = status
-            elif status == 'failed':
+            elif status == 'failed' or status == 'retry':
                 task_doc['download_retry_{0}_stop'.format(retry_count)] = datetime.datetime.now()
                 task_doc['download_retry_{0}_status'.format(retry_count)] = status 
+                task_doc['download_status'] = status
                 task_doc['download_retry_{0}_exception'.format(retry_count)] = kwargs.get('exc')
                 task_doc['download_retry_{0}_einfo'.format(retry_count)] = kwargs.get('einfo')
-                if retry_count == 2 or self.error_type == 'user_abort':
-                    task_doc['download_exception'] = kwargs.get('exc')
-                    task_doc['download_einfo'] = kwargs.get('einfo')
+                #if retry_count == 2 or self.error_type == 'user_abort':
+                #    task_doc['download_exception'] = kwargs.get('exc')
+                #    task_doc['download_einfo'] = kwargs.get('einfo')
             elif status == 'done':
                 task_doc['download_retry_{0}_status'.format(retry_count)] = status
                 task_doc['download_retry_{0}_stop'.format(retry_count)] = datetime.datetime.now()
@@ -1228,7 +764,8 @@ class DownloadTestTask(Task):
                 task_doc['download_stop'] = datetime.datetime.now()
                 task_doc['download_status'] = status
                 task_doc['download_retval'] = kwargs.get('retval')
-            elif status == 'failed' and self.error_type == 'user_abort':
+            #elif status == 'failed' and self.error_type == 'user_abort':
+            elif status == 'failed' or status == 'retry':
                 task_doc['download_exception'] = kwargs.get('exc')
                 task_doc['download_status'] = status
                 task_doc['download_einfo'] = kwargs.get('einfo')

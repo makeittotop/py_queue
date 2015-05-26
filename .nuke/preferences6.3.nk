@@ -1,0 +1,18 @@
+Preferences {
+ inputs 0
+ name Preferences
+ Script_command_default false
+ CacheLimit 80
+ FloatingWindowHint "Normal (KDE)"
+ maxPanels 3
+ reopenMovesPanel true
+ UIFont "Bitstream Vera Sans Italic Italic Italic Italic Italic Italic Italic Italic Italic Italic Italic Italic"
+ UILabelColor 0xffffffff
+ LabelFont "DejaVu LGC Sans"
+ LabelSize 9
+ DAGBackColor 0x323232ff
+ Viewer3DControlEmulation Maya
+ viewer_handle_size_3d 8
+ ScriptEditorFont "Bitstream Vera Sans"
+ echoAllCommands true
+}

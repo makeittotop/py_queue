@@ -64,6 +64,13 @@ env.passwords = {
 ['__add__', '__class__', '__contains__', '__delattr__', '__dict__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__getitem__', '__getnewargs__', '__getslice__', '__gt__', '__hash__', '__init__', '__le__', '__len__', '__lt__', '__mod__', '__module__', '__mul__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__rmod__', '__rmul__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '_formatter_field_name_split', '_formatter_parser', 'capitalize', 'center', 'command', 'count', 'decode', 'encode', 'endswith', 'expandtabs', 'failed', 'find', 'format', 'index', 'isalnum', 'isalpha', 'isdigit', 'islower', 'isspace', 'istitle', 'isupper', 'join', 'ljust', 'lower', 'lstrip', 'partition', 'real_command', 'replace', 'return_code', 'rfind', 'rindex', 'rjust', 'rpartition', 'rsplit', 'rstrip', 'split', 'splitlines', 'startswith', 'stderr', 'stdout', 'strip', 'succeeded', 'swapcase', 'title', 'translate', 'upper', 'zfill']
 '''
 
+def get_machine_info():
+    with settings(warn_only=True):
+        #result = run("lspci -vnn | grep VGA -A 12")
+        #result = run("DISPLAY=:0 glxinfo | grep OpenGL | grep renderer | cut -d: -f2 | cut -d/ -f1")
+        result = run("lspci -vnn | grep VGA | grep  -oE \"[[:alnum:]]{4}:[[:alnum:]]{4}\"  | awk -F: '{printf \"curl -XGET http://pci-ids.ucw.cz/read/PC/%s/%s -s | grep itemname | head -1 | cut -d: -f2 \\n\", $1, $2}' | sh")
+        print >>sys.stderr, result
+
 def check_notify_daemon():
     with settings(warn_only=True):
         result = run("cat /var/run/notification_client.pid; pgrep -lf notification_client;")
@@ -138,7 +145,7 @@ def yum_check_pip():
         result = run("yum info python-pip.noarch | grep -i repo", shell=True)    
     print >>sys.stdout, "Result: ", result
     
-@hosts('172.16.15.214') #'172.16.15.214', '172.16.15.212')
+@hosts('172.16.15.215') #'172.16.15.214', '172.16.15.212')
 def yum_install_pip():
     with settings(warn_only=True):
         result = run("yum -y install python-pip.noarch", shell=True)    
@@ -148,8 +155,8 @@ def yum_install_pip():
 def yum_update():
     print >>sys.stderr, run("yum -y update").return_code
         
-@hosts('172.16.15.214') #'172.16.15.214', '172.16.15.212')
-def pip_install_modules():
+@hosts('172.16.15.215') #'172.16.15.214', '172.16.15.212')
+def pip_install_modules_queue():
     result = run("pip install celery")
     print >>sys.stdout, result
     result = run("pip install redis")

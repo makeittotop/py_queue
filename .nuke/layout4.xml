@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<layout version="1.0">
+    <window x="0" y="0" w="1920" h="1200" fullscreen="1" screen="0">
+        <splitter orientation="1">
+            <split size="754"/>
+            <splitter orientation="1">
+                <split size="754"/>
+                <dock id="" hideTitles="1" activePageId="Script Editor.2">
+                    <page id="Script Editor.2"/>
+                </dock>
+            </splitter>
+            <split size="1162"/>
+            <splitter orientation="2">
+                <split size="848"/>
+                <dock id="" hideTitles="1" activePageId="Viewer.1">
+                    <page id="Viewer.1"/>
+                </dock>
+                <split size="324"/>
+                <dock id="" hideTitles="1" activePageId="DAG.1">
+                    <page id="DAG.1"/>
+                </dock>
+            </splitter>
+        </splitter>
+    </window>
+</layout>

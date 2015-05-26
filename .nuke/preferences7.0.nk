@@ -1,0 +1,23 @@
+Preferences {
+ inputs 0
+ name Preferences
+ CacheLimit 80
+ selectedGPUDeviceName "Quadro K5000"
+ platformPathRemaps ""
+ Script_command_default false
+ FloatingWindowHint "Normal (KDE)"
+ maxPanels 3
+ reopenMovesPanel true
+ UIFont "DejaVu Sans Italic Italic"
+ UILabelColor 0xffffffff
+ LabelFont "DejaVu LGC Sans"
+ LabelSize 9
+ DAGBackColor 0x323232ff
+ defaultBufferDepth half-float
+ defaultGPUForViewer true
+ defaultGPUForInputs true
+ Viewer3DControlEmulation Maya
+ viewer_handle_size_3d 8
+ ScriptEditorFont "Bitstream Vera Sans"
+ echoAllCommands true
+}

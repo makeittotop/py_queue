@@ -1,26 +1,42 @@
 #!/usr/bin/env python
 
-from pymongo import MongoClient
+import pymongo
 from tabulate import tabulate  
-import datetime, sys
+import datetime, sys, os
+import json
 
+# Tractor API
+path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if not path in sys.path:
+    sys.path.insert(1, path)
+del path
+
+import tractor.api.query as tq
+tq.setEngineClientParam(hostname="113.107.235.11", port=1503, user='abhishek', debug=False)
 
 if len(sys.argv) < 2:
     print >>sys.stdout, "Usage: <script> <user_name>\n\n"
     sys.exit(0)
 
-d = datetime.datetime(2014, 12, 22, 0, 0, 0) #datetime.date.today() #(2014, 11, 30, 23, 0, 0)
+d = datetime.datetime(2014, 12, 25, 0, 0, 0) #datetime.date.today() #(2014, 11, 30, 23, 0, 0)
 
-client = MongoClient('lic', 27017)
+client = pymongo.MongoClient('lic', 27017)
 collection = client.queue.tasks
 
-if sys.argv[1] == 'all':
-    query_dict = {'task_init': {'$gt' : d}}
+today = datetime.date.today()
+
+if sys.argv[1] == 'active':
+    query_dict = { '$and' : [ { '$or' : [ { 'task_init' : { '$gt' : d } }, { 'download_start' : { '$gt' : d } } ] }, { '$or' : [ { 'upload_status' : 'pending' }, { 'upload_status' : 'active' }, { 'download_status' : 'pending' }, { 'download_status' : 'active' }, {'spool_status' : 'pending' } ] } ] }
+    #query_dict = { '$and' : [ { 'task_init' : { '$gt' : d } }, { '$or' : [ { 'upload_status' : 'pending' }, { 'upload_status' : 'active' }, { 'download_status' : 'pending' }, { 'download_status' : 'active' }, {'spool_status' : 'pending' } ] } ] }
+    #query_dict = {'task_init': {'$gt' : d}, 'upload_status' : 'pending', 'dowmload_status' : 'pending', 'spool_status' : 'pending'}
+elif sys.argv[1] == 'today':
+    d = datetime.datetime(today.year, today.month, today.day)
+    query_dict = {'task_init': {'$gt' : d } }
 else:
-    #query_dict = {'task_owner': sys.argv[1], 'task_init': {'$gt' : d}}  
-    query_dict = {'task_owner': sys.argv[1]}  
+    query_dict = {'task_owner': sys.argv[1], 'task_init': {'$gt' : d } }  
+    #query_dict = {'task_owner': sys.argv[1]}  
       
-user_docs = collection.find(query_dict)
+user_docs = collection.find(query_dict).sort('task_init', pymongo.ASCENDING)
 
 task_table = []
 for doc in user_docs:
@@ -38,7 +54,8 @@ for doc in user_docs:
         sub_task.append('--')
     if doc.has_key('upload_status'):
         #4. 
-        sub_task.append(doc.get('upload_status'))
+        sub_task.append(doc.get('upload_status')[0:4])
+        #sub_task.append("done")
     else:
         sub_task.append('--')
     if doc.has_key('spool_id'):
@@ -48,27 +65,62 @@ for doc in user_docs:
         sub_task.append('--')
     if doc.has_key('spool_status'):
         #6. 
-        sub_task.append(doc.get('spool_status'))
+        sub_task.append(doc.get('spool_status')[0:4])
     else:
         sub_task.append('--')
     if doc.has_key('spool_retval'):
         #7. 
-        sub_task.append(doc.get('spool_retval'))
+        jid = json.loads(doc.get('spool_retval')).get('jid')
+        sub_task.append(jid)
+        #8.
+        job_data = tq.jobs("jid={0}".format(jid), archive=True)[0] 
+
+        if job_data.get("deletetime"):
+            render_status = "Deleted"
+        else:    
+            frames_tot = job_data.get("numtasks")
+            frames_done = job_data.get("numdone")
+            frames_active = job_data.get("numactive")
+            frames_error = job_data.get("numerror")
+            frames_ready = job_data.get("numready")
+            frames_blocked = job_data.get("numblocked")
+
+            '''
+            frames_tot = tq.tasks("jid={0}".format(jid))
+            frames_done = tq.tasks("jid={0} and done".format(jid))
+            frames_active = tq.tasks("jid={0} and active".format(jid))
+            frames_error = tq.tasks("jid={0} and error".format(jid))
+            '''
+            if frames_tot == frames_done:
+                render_status = 'Done'
+            elif frames_active:
+                render_status = 'Active'
+            elif frames_error:
+                render_status = 'Error'
+            elif frames_ready:
+                render_status = 'Waiting'        
+            elif frames_blocked:
+                render_status = 'Blocked'
+
+        sub_task.append(render_status[0:4])
+
     else:
         sub_task.append('--')
     if doc.has_key('download_id'):
-        #8. download id
+        #9. download id
         sub_task.append(doc.get('download_id'))
     else:
         sub_task.append('--')
     if doc.has_key('download_status'):
-        #9. 
-        sub_task.append(doc.get('download_status'))
+        #10. 
+        sub_task.append(doc.get('download_status')[0:4])
     else:
         sub_task.append('--')
+
     task_table.append(sub_task)
 
-headers=["Task ID", "Task Owner", "Task Init", "Upload ID", "Upload Status", "Spool ID", "Spool Status", "Render Status", "Download ID", "Download Status"]
+headers=["Task ID", "Task Owner", "Task Init", "Upload ID", "Upload Status", "Spool ID", "Spool Status", "Render ID", "Render Status", "Download ID", "Download Status"]
+#headers=["Task ID", "Task Owner", "Task Init", "Upload ID", "Upload Status", "Spool Status", "Render ID", "Render Status", "Download ID", "Download Status"]
 
 if user_docs:
     print >>sys.stdout, tabulate(task_table, headers=headers)

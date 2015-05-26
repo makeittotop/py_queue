@@ -1,0 +1,64 @@
+#! /usr/local/Nuke7.0v2/Nuke7.0 -nx
+version 6.3 v4
+Gizmo {
+ addUserKnob {20 User}
+ addUserKnob {41 disable_1 l "True light <=> Cineon Filmlook" T Log2Lin4.disable}
+ addUserKnob {41 profile T Truelight1.profile}
+ addUserKnob {41 black T Log2Lin4.black}
+ addUserKnob {41 white T Log2Lin4.white}
+ addUserKnob {41 gamma T Log2Lin4.gamma}
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos -89
+  ypos -8
+ }
+ Log2Lin {
+  operation lin2log
+  black 0
+  white 1023
+  name Log2Lin3
+  xpos -89
+  ypos 32
+ }
+ Log2Lin {
+  gamma 1
+  name Log2Lin4
+  selected true
+  xpos -89
+  ypos 61
+  disable true
+ }
+ Truelight3 {
+  commands {title{Kodak Vision Premier}
+print{internal-Kodak2393}
+display{sRGB}
+greyValue{445,445,445}
+whiteValue{1023,1023,1023}
+aimGamma{0.966,1.063,1.082}
+greyStatusA{1.09,1.06,1.03}}
+  input_is_log true
+  output_raw true
+  profile /usr/local/Nuke7.0v2/plugins/truelight3/profiles/KodakVisionPremier
+  display sRGB
+  enable_display true
+  display_file /usr/local/Nuke7.0v2/plugins/truelight3/displays/monitor
+  lamp internal-Xenon
+  printer_points {0 0 0}
+  brightness 1
+  flare_correction 0.009999999776
+  white_u 0.1977999955
+  white_v 0.4683000147
+  name Truelight1
+  label "Truelight v3.0"
+  xpos -89
+  ypos 99
+  disable {{"parent.Log2Lin4.disable ==0" i}}
+ }
+ Output {
+  name Output1
+  xpos -89
+  ypos 160
+ }
+end_group
